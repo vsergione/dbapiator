@@ -1,0 +1,407 @@
+#%RAML 1.0
+title: "Apiator"
+description: "Apiator is an API to access any SQL database. Following the setup phase,\
+  \ the configured database can be queried using the API calls documented here. \n\
+  This is a generic API specification. Database specific API specification are automatically\
+  \ generated in the database setup phase."
+version: "1.0.0"
+protocols:
+- "HTTPS"
+baseUri: "https://dbapi.pinero.io/api/v1/apps"
+mediaType:
+- "application/json"
+- "text/xml"
+types:
+  JSONApiDocument:
+    type: "object"
+    properties:
+      data:
+        type: "resourceLinkageObject"
+        description: "the document’s “primary data”"
+        required: false
+      meta:
+        type: "metaObject"
+        description: "a meta object that contains non-standard meta-information."
+        required: false
+      errors:
+        type: "array"
+        required: false
+        items:
+          type: "errorObject"
+      jsonapi:
+        type: "jsonApiObject"
+        description: "an object describing the server’s implementation"
+        required: false
+      links:
+        type: "linksObject"
+        description: "a links object related to the primary data."
+        required: false
+      included:
+        type: "array"
+        description: "an array of resource objects that are related to the primary\
+          \ data and/or each other (“included resources”).\nIf a document does not\
+          \ contain a top-level data key, the included member MUST NOT be present\
+          \ either."
+        required: false
+        items:
+          type: "string"
+    additionalProperties: false
+  jsonApiObject:
+    type: "object"
+    description: "A JSON API document MAY include information about its implementation\
+      \ under a top level jsonapi member. If present, the value of the jsonapi member\
+      \ MUST be an object (a “jsonapi object”). The jsonapi object MAY contain a version\
+      \ member whose value is a string indicating the highest JSON API version supported.\
+      \ This object MAY also contain a meta member, whose value is a meta object that\
+      \ contains non-standard meta-information."
+    properties:
+      version:
+        type: "string"
+        description: "If the version member is not present, clients should assume\
+          \ the server implements at least version 1.0 of the specification"
+        required: false
+    example:
+      value: "\"jsonapi\": {\n  \"version\": \"1.0\"\n}"
+      strict: false
+  resourceLinkageObject:
+    type: "object"
+    description: "Resource linkage in a compound document allows a client to link\
+      \ together all of the included resource objects without having to GET any URLs\
+      \ via links.\n\nResource linkage MUST be represented as one of the following:\n\
+      \nnull for empty to-one relationships.\nan empty array ([]) for empty to-many\
+      \ relationships.\na single resource identifier object for non-empty to-one relationships.\n\
+      an array of resource identifier objects for non-empty to-many relationships."
+  resourceObject:
+    type: "object"
+    properties:
+      type:
+        type: "string"
+      id:
+        type: "string"
+      attributes:
+        type: "object"
+        required: false
+      relationships:
+        type: "object"
+        required: false
+        properties:
+          author:
+            type: "object"
+            required: false
+            properties:
+              links:
+                type: "object"
+                required: false
+                properties:
+                  self:
+                    type: "string"
+                    required: false
+                  related:
+                    type: "string"
+                    required: false
+              data:
+                type: "object"
+                required: false
+                properties:
+                  type:
+                    type: "string"
+                    required: false
+                  id:
+                    type: "string"
+                    required: false
+    example:
+      value: "{\n  \"type\": \"articles\",\n  \"id\": \"1\",\n  \"attributes\": {\n\
+        \    \"title\": \"Rails is Omakase\"\n  },\n  \"relationships\": {\n    \"\
+        author\": {\n      \"links\": {\n        \"self\": \"/articles/1/relationships/author\"\
+        ,\n        \"related\": \"/articles/1/author\"\n      },\n      \"data\":\
+        \ { \"type\": \"people\", \"id\": \"9\" }\n    }\n  }\n}"
+      strict: false
+  resourceObjectArray:
+    type: "array"
+    description: "Array of resourceObjects"
+    items:
+      type: "resourceObject"
+  linksObject:
+    type: "object"
+    description: "Where specified, a links member can be used to represent links.\
+      \ The value of each links member MUST be an object (a “links object”)."
+    properties:
+      self:
+        type: "linkObject"
+        description: "the link that generated the current response document."
+        required: false
+      related:
+        type: "linkObject"
+        description: "a related resource link when the primary data represents a resource\
+          \ relationship.\npagination links for the primary data."
+        required: false
+    example:
+      value: "\"links\": {\n  \"self\": \"http://example.com/posts\",\n  \"related\"\
+        : {\n    \"href\": \"http://example.com/articles/1/comments\",\n    \"meta\"\
+        : {\n      \"count\": 10\n    }\n  }\n}"
+      strict: false
+  linkObject:
+    type: "object"
+    description: "A link MUST be represented as either:\n\na string containing the\
+      \ link’s URL.\nan object (“link object”) which can contain the following members:\n\
+      href: a string containing the link’s URL.\nmeta: a meta object containing non-standard\
+      \ meta-information about the link.\n"
+    example:
+      value: "The following link is simply an URL:\n\n\"http://example.com/posts\"\
+        \n\nThe following  link includes an URL as well as meta-information about\
+        \ a related resource collection:\n\n{\n    \"href\": \"http://example.com/articles/1/comments\"\
+        ,\n    \"meta\": {\n      \"count\": 10\n    }\n}"
+      strict: false
+  relationshipObject:
+    type: "object"
+    description: " Members of the relationships object (“relationships”) represent\
+      \ references from the resource object in which it’s defined to other resource\
+      \ objects."
+    example:
+      value: "\"relationships\": {\n    \"author\": {\n      \"links\": {\n      \
+        \  \"self\": \"http://example.com/articles/1/relationships/author\",\n   \
+        \     \"related\": \"http://example.com/articles/1/author\"\n      },\n  \
+        \    \"data\": { \"type\": \"people\", \"id\": \"9\" }\n    }\n  }"
+      strict: false
+  errorObject:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+        description: "a unique identifier for this particular occurrence of the problem."
+        required: false
+      links:
+        type: "string"
+        description: "a links object containing the following members:\nabout: a link\
+          \ that leads to further details about this particular occurrence of the\
+          \ problem."
+        required: false
+      status:
+        type: "string"
+        description: "the HTTP status code applicable to this problem, expressed as\
+          \ a string value"
+        required: false
+      code:
+        type: "string"
+        description: "an application-specific error code, expressed as a string value."
+        required: false
+      title:
+        type: "string"
+        description: "a short, human-readable summary of the problem that SHOULD NOT\
+          \ change from occurrence to occurrence of the problem, except for purposes\
+          \ of localization."
+        required: false
+      detail:
+        type: "string"
+        description: "a human-readable explanation specific to this occurrence of\
+          \ the problem. Like title, this field’s value can be localized."
+        required: false
+      source:
+        type: "object"
+        description: "an object containing references to the source of the error,\
+          \ optionally including any of the following members: pointer, parameter"
+        required: false
+        properties:
+          pointer:
+            type: "string"
+            description: "a JSON Pointer [RFC6901] to the associated entity in the\
+              \ request document [e.g. \"/data\" for a primary data object, or \"\
+              /data/attributes/title\" for a specific attribute]."
+            required: false
+          parameter:
+            type: "string"
+            description: "a string indicating which URI query parameter caused the\
+              \ error."
+            required: false
+    additionalProperties: false
+  metaObject:
+    type: "object"
+    description: "A meta member can be used to include non-standard meta-information.\
+      \ The value of each meta member MUST be an object (a “meta object”).\nAny members\
+      \ MAY be specified within meta objects.\n\n"
+    example:
+      value: "{\n    \"copyright\": \"Copyright 2015 Example Corp.\",\n    \"authors\"\
+        : [\n      \"Yehuda Katz\",\n      \"Steve Klabnik\",\n      \"Dan Gebhardt\"\
+        ,\n      \"Tyler Kellen\"\n    ]\n  }"
+      strict: false
+  errorResponse:
+    type: "object"
+    description: "response which is sent when there is an error on server side"
+    properties:
+      errors:
+        type: "array"
+        required: false
+        items:
+          type: "errorObject"
+/{appName}/views/{viewName}:
+  displayName: "View configuration endpoint"
+  uriParameters:
+    appName:
+      type: "string"
+      description: "Application name"
+    viewName:
+      type: "string"
+      description: "View name"
+  get:
+    displayName: "Retrieve views configuration"
+    responses:
+      200:
+        body:
+          type: "JSONApiDocument"
+      404:
+        body:
+          type: "JSONApiDocument"
+/{appName}/tables/{tableName}:
+  displayName: "Table configuration endpoint"
+  uriParameters:
+    appName:
+      type: "string"
+      description: "Session name"
+    tableName:
+      type: "string"
+      description: "Table name"
+  get:
+    displayName: "Retrieve table configuration"
+    responses:
+      200:
+        body:
+          type: "JSONApiDocument"
+      404:
+        description: "appName or tableName not found"
+        body:
+          type: "JSONApiDocument"
+/{appName}/tables/{tableName}/records:
+  displayName: "Table records endpoint"
+  uriParameters:
+    appName:
+      type: "string"
+      description: "App name"
+    tableName:
+      type: "string"
+      description: "Table name"
+  get:
+    displayName: "Retrieve table records"
+    queryParameters:
+      filter:
+        type: "string"
+        description: "comma separated list of filter conditions. Filter conditions\
+          \ are AND-joined"
+        required: false
+      include:
+        type: "string"
+        description: "include records linked through foreign key relations"
+        required: false
+      offset:
+        type: "integer"
+        description: "offset to apply to record set"
+        required: false
+      limit:
+        type: "integer"
+        description: "number of records to return"
+        required: false
+      sort:
+        type: "string"
+        description: "comma separated list of sort criterias"
+        required: false
+  post:
+    displayName: "Create (or update when duplicate) records"
+    description: "Creates new records."
+    queryParameters:
+      options:
+        type: "string"
+        description: "comma separated list of options:\n- duplicateUpdate: instructs\
+          \ the backend to update the record in case a duplicate insert is detected\n\
+          - createRecursive: instructs the backend to create records recursively.\
+          \ Not yet implemented"
+        enum:
+        - "createRecursive"
+        - "duplicateUpdate"
+        pattern: "(\\w+)(,\\w+)*"
+        required: false
+        examples:
+          example: "createRecursive"
+          example1: "duplicateUpdate"
+          example2:
+            value: "duplicateUpdate,createRecursive"
+            strict: false
+      update:
+        type: "string"
+        description: "comma separated list of fields to update when option  duplicateUpdate\
+          \ is provided"
+        required: false
+    body:
+      type: "JSONApiDocument"
+  put:
+    displayName: "Update bulk records"
+  delete:
+    displayName: "Delete records"
+    responses:
+      204:
+        description: "All requested records where successfully deleted"
+/{appName}/views/:
+  displayName: "Views list endpoint"
+  uriParameters:
+    appName:
+      type: "string"
+  get:
+    displayName: "Retrieve all available views"
+    responses:
+      200:
+        body:
+          type: "JSONApiDocument"
+/{appName}/tables/:
+  displayName: "Tables list endpoint"
+  uriParameters:
+    appName:
+      type: "string"
+      description: "Session name"
+  get:
+    displayName: "Retrieve list of available tables"
+    responses:
+      200:
+        body:
+          type: "JSONApiDocument"
+      404:
+        description: "It will replay with 404 when appName is not found"
+        body:
+          type: "JSONApiDocument"
+/{appName}/:
+  displayName: "Application information"
+  uriParameters:
+    appName:
+      type: "string"
+      description: "Application name"
+  get:
+    displayName: "Retrieve application configuration"
+    responses:
+      200:
+        body:
+          type: "JSONApiDocument"
+      404:
+        body:
+          type: "errorResponse"
+/{appName}/tables/{tableName}/records/{recordId}:
+  displayName: "Single record endpoint"
+  uriParameters:
+    appName:
+      type: "string"
+      description: "App name"
+    tableName:
+      type: "string"
+      description: "Table name"
+    recordId:
+      type: "string"
+  get:
+    displayName: "Retrieve record"
+    queryParameters:
+      include:
+        type: "string"
+        description: "include records linked through foreign key relations"
+        required: false
+  put:
+    displayName: "Update record"
+  delete:
+    displayName: "Delete records"
+    responses:
+      204:
+        description: "All requested records where successfully deleted"

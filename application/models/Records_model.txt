@@ -1,0 +1,957 @@
+<?php  if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+require_once(APPPATH."libraries/Response.php");
+require_once(APPPATH."libraries/Errors.php");
+require_once(APPPATH.'libraries/RecordSet.php');
+
+
+require_once(APPPATH."libraries/HttpResp.php");
+require_once(APPPATH."helpers/manager_helper.php");
+require_once(APPPATH."third_party/Apiator/Autoloader.php");
+\Apiator\Autoloader::register();
+
+/**
+ * Class Resources_model
+ * @property generic_model_lib gml
+ * @property CI_Loader load
+ * @property CI_Config config
+ */
+class Records_model extends CI_Model {
+    /**
+     * @var \Apiator\DBApi\Datamodel
+     */
+    private $dm;
+
+    /**
+     * @var CI_DB_driver
+     */
+    private $dbdrv;
+
+
+    function __construct() {
+        parent::__construct();
+    }
+
+    function init($dbDriver,$dataModel) {
+        $this->dm = $dataModel;
+        $this->dbdrv = $dbDriver;
+    }
+
+
+
+    /**
+     * @param $totalRecs
+     * @param $data
+     * @param int $offset
+     * @param null $includeArr
+     * @return object
+     */
+    private function build_return_obj($totalRecs, $data, $offset=0, $includeArr=null) {
+        $data = is_array($data)?$data: [];
+        $return = (object) ["data"=>array_values($data)];
+        $return->meta = (object) ["total"=>$totalRecs,"offset"=>$offset];
+        if(count($includeArr)) {
+            $return->included = $includeArr;
+        }
+
+        return $return;
+    }
+
+
+    /**
+     * @param array $order order array
+     * @param array $queryFromArr array of tables to query from
+     * @return array Array of strings  to be used in ORDER BY statement
+     */
+    private function generate_order_arr($order,$queryFromArr) {
+        $orderByArr = [];
+        foreach($order as $item) {
+            $item = (object) $item;
+            if(in_array($item->alias,$queryFromArr)) {
+                if($this->dm->is_valid_field($item->table,$item->fld))
+                    $orderByArr[] = sprintf("%s.%s %s",$item->table,$item->fld,$item->dir);
+            }
+        }
+        return $orderByArr;
+    }
+
+    /**
+     * prepare fields for SELECT clause
+     *
+     * @param array $fields reference of fields array
+     * @return array
+     */
+    private function clean_up_fields($fields) {
+        // cleanup fields and add id field when not existing
+        foreach($fields as $tbl=>$flds) {
+            if(!$this->dm->is_valid_table($tbl)) {
+                unset($fields[$tbl]);
+            }
+            else {
+                if(!empty($flds)) {
+                    $fields[$tbl] = array();
+                    foreach($flds as $fld) {
+                        if($this->dm->is_valid_field($tbl,$fld)) {
+                            $fields[$tbl][] = $fld;
+                        }
+                    }
+                    if(count($fields[$tbl]) && !in_array("id",$flds)) {
+                        array_push($fields[$tbl],"id");
+                    }
+                }
+            }
+        }
+        return $fields;
+    }
+
+    /**
+     * extract ids from records in RecordSet
+     * @param mixed $data
+     * @return array List of extracted Record ids
+     */
+    private function get_ids($data)
+    {
+        $tmp = is_array($data)?$data: [$data];
+        $ids = [];
+        foreach($tmp as $rec) {
+            if(property_exists($rec,"id"))
+                array_push($ids,$rec->id);
+        }
+        return $ids;
+    }
+
+
+
+    /**
+     * @param string $table
+     * @param array $includes
+     * @param array $selectedFields
+     * @param array $filters
+     * @param int $offset
+     * @param int $limit
+     * @param array $order
+     * @return RecordSet
+     */
+    function get_records($table, $includes, $selectedFields, $filters, $offset=0, $limit=10, $order=[]) {
+        //echo "get records";
+        // validate main inputs
+
+        //$queryFromArr = [$table];
+        $includedFields = [];
+        $includedFields[$table] = [];
+
+        $from = [
+            "table"=>$table,
+            "fields"=> [],
+            "order"=> [],
+            "where"=> []
+        ];
+
+        // generate join & part of the fields Arr
+        $joinArr = [];
+        foreach ($includes as $include) {
+            $fk = $this->dm->get_fk_relation($table,$include);
+
+            if($fk->success) {
+                $rel = $fk->data;
+                $alias = sprintf("%s_%s",$include,$rel->table);
+                $joinArr[$include] = [
+                    "table" => $rel->table,
+                    "alias"=> $alias,
+                    "left"=>$alias.".".$rel->field,
+                    "right"=>$table.".".$include,
+                    "fields"=> [],
+                    "order"=> [],
+                    "where"=> []
+                ];
+
+                if(isset($selectedFields[$include])) {
+                    foreach ($selectedFields[$include] as $fld)
+                        if($this->dm->is_valid_field($rel->table,$fld))
+                            array_push($joinArr[$include]["fields"],$fld);
+                }
+
+                if(empty($joinArr[$include]["fields"]))
+                    array_push($joinArr[$include]["fields"],"*");
+                elseif (!in_array("id",$joinArr[$include]["fields"]))
+                    array_push($joinArr[$include]["fields"],"id");
+            }
+        }
+
+        // take care  of the from part
+        if(isset($selectedFields[$table])) {
+            foreach ($selectedFields[$table] as $fld)
+                if ($this->dm->is_valid_field($table, $fld))
+                    array_push($from["fields"], $fld);
+        }
+
+        if(empty($from["fields"]))
+            array_push($from["fields"], "*");
+        else {
+            array_push($from["fields"], "id");
+            $from["fields"] = array_merge($from["fields"],array_keys($joinArr));
+            $from["fields"] = array_unique($from["fields"]);
+        }
+
+
+        // ORDER BY array generation
+        $orderByArr = [];
+        foreach ($order as $item) {
+            if($item->alias==$table && $this->dm->is_valid_field($table,$item->fld))
+                $orderByArr[] = sprintf("%s.%s %s",$table,$item->fld,$item->dir);
+            if(isset($joinArr[$item->alias]) && $this->dm->is_valid_field($joinArr[$item->alias]["table"],$item->fld))
+                $orderByArr[] = sprintf("%s.%s %s",$joinArr[$item->alias]["alias"],$item->fld,$item->dir);
+        }
+
+
+        // generate $whereArr
+        $whereArr = [];
+        foreach ($filters as $filter) {
+            if($filter->left->alias==$table
+                && $this->dm->is_searchable_field($table,$filter->left->field)) {
+                $whereArr[] = generate_where_str($filter);
+
+            }
+            elseif(isset($joinArr[$filter->left->alias])
+                && $this->dm->is_searchable_field($joinArr[$filter->left->alias]["table"],$filter->left->field)) {
+                $filter->left->alias = $joinArr[$filter->left->alias]["alias"];
+                $whereArr[] = generate_where_str($filter);
+            }
+        }
+
+        //list($totalRecs,$res) = $this->select_query($from,$joinArr,$whereArr,$orderByArr,$offset,$limit);
+        list($countSql,$mainSql) = render_select_query($from,$joinArr,$whereArr,$orderByArr,$offset,$limit);
+
+        $res = $this->dbdrv->query($countSql);
+        //echo $this->db->last_query();
+        $totalRecs = $res->row()->cnt;
+        if($totalRecs===0)
+            $mainSql = "SELECT 1 from DUAL where false";
+        $res = $this->dbdrv->query($mainSql);
+
+        $recordSet = new RecordSet([],$table,$offset,$totalRecs);
+
+        if($from["fields"][0]=="*") {
+            $from["fields"] = array_keys((array) $this->dm->get_fields($from["table"]));
+        }
+
+        foreach ($joinArr as $fld=>$join) {
+            if($join["fields"][0]=="*") {
+                $joinArr[$fld]["fields"] = array_keys((array) $this->dm->get_fields($join["table"]));
+            }
+        }
+
+        $resArray = $res->result_array_num();
+
+        foreach ($resArray as $row) {
+            $tmp = [];
+            for($i=0;$i<count($from["fields"]);$i++) {
+                $tmp[$from["fields"][$i]] = $row[$i];
+            }
+            $newRec = $recordSet->add_record($table,$tmp);
+            $recOffset = count($from["fields"]) ;
+            foreach ($joinArr as $fld=>$join) {
+                $tmp = [];
+                for($i=0;$i<count($join["fields"]);$i++) {
+                    $tmp[$join["fields"][$i]] = $row[$i+$recOffset];
+                }
+
+                if(!empty($tmp["id"])) {
+                    $relRecId = $tmp["id"];
+                    $relRecType = $join["table"];
+                    unset($tmp["id"]);
+                    $newRec->attributes->$fld = new Record($relRecType,$relRecId,$tmp);
+                }
+                //$RecordSet->add_related_record($join["table"],$tmp);
+                $recOffset += count($join["fields"]);
+            }
+            reset($joinArr);
+        }
+
+        return $recordSet;
+    }
+
+
+
+    /**
+     * create new Record
+     *
+     * @param string $table
+     * @param object $data
+     * @param null|array $updateFlds fields to update in case of duplicate
+     * @param  array $options
+     * @return Response
+     */
+    function create($table,$data,$updateFlds,$options) {
+        // validate attributes
+        //print_r($data);
+        $validation = $this->dm->validate_object_attributes($table,$data,"ins");
+        //print_r($validation);
+        if(!$validation->success)
+            return $validation;
+        $attributes = $validation->data;
+        /**
+         *search for included objects
+         */
+        // todo implement non createrecursive
+
+        foreach($attributes as $name=>$value) {
+            //if(is_object($value) && in_array("createRecursive",$options)) {
+            if(is_object($value)) {
+
+                // insert first embeded objects
+                $validation = is_valid_data($value);
+                if(!$validation->success)
+                    return $validation;
+
+                $value = $value->data;
+
+                $resp = $this->create($value->type,$value->attributes,$updateFlds,$options);
+
+                if(!$resp->success)
+                    return $resp;
+                $attributes->$name = $resp->data;
+            }
+        }
+
+
+        $insSql = $this->dbdrv->insert_string($table,$attributes);
+
+        $updStr = in_array("duplicateUpdate",$options)?["id=id"]:[];
+        if(!empty($updateFlds[$table])) {
+            foreach($updateFlds[$table] as $fld) {
+                if($this->dm->is_valid_field($table,$fld) && isset($attributes->$fld)) {
+                    $updStr[] = "$fld=VALUES($fld)";
+                }
+            }
+        }
+        $insSql .= (in_array("duplicateUpdate",$options)?" ON DUPLICATE KEY UPDATE ":" ").implode(",",$updStr);
+
+        if(!$this->dbdrv->query($insSql))
+            return Response::make(false, 500, $this->dbdrv->error()["message"]);
+
+
+        $insId = $this->dbdrv->insert_id();
+        if($insId)
+            return Response::make(true,201,$insId);
+
+        // it was a duplicate
+        $this->dbdrv->where((array) $attributes);
+        $selSql = $this->dbdrv->get_compiled_select($table);
+        $q = $this->dbdrv->query($selSql);
+
+
+        if($q->num_rows()>1) {
+            log_message("debug","More then one records returned on Insert new record: $insSql / $selSql");
+            return Response::make(false,500,"More then one records returned");
+        }
+        elseif($q->num_rows()==0)
+            return Response::make(false,500,"Server error. Contact administrator.");
+
+
+        $newRecId = $q->row()->id;
+        return Response::make(true,201,$newRecId);
+
+    }
+
+
+
+    /**
+     * update Record
+     * @param $table
+     * @param $id
+     * @param $attributes
+     * @return Response
+     */
+    function update($table, $id, $attributes) {
+        $validation = $this->dm->validate_object_attributes($table,$attributes,"upd");
+        if(!$validation->success)
+            return $validation;
+        $attributes = $validation->data;
+
+        // get key flds of table
+        $keyFlds = $this->dm->get_key_flds($table);
+        if($keyFlds->success)
+            $keyFlds = $keyFlds->data;
+        else
+            return $keyFlds;
+
+        // validate uniq recs
+        $whereArr = array();
+        foreach($attributes as $name=>$value) {
+            if(in_array($name,$keyFlds)) {
+                $whereArr[] = "$name='$value'";
+            }
+        }
+
+        if(count($whereArr)) {
+            $sql = "SELECT * FROM $table WHERE id!='$id' AND (".implode(" OR ",$whereArr).")";
+
+            $q = $this->dbdrv->query($sql);
+            if($q->num_rows()) {
+                return Response::make(false,409,"Duplicate key fields");
+            }
+        }
+
+
+        $this->dbdrv->where("id",$id);
+        $this->dbdrv->update($table,$attributes);
+        return $this->dbdrv->affected_rows()>0?Response::make(true,200):Response::make(true,204);
+    }
+
+
+    /**
+     * delete Record id $id from $database/$table
+     *
+     * @param string $tableName
+     * @param string $recId
+     *
+     * @return Response
+     */
+    function delete($tableName, $recId) {
+        if(!$this->dm->is_valid_table($tableName))
+            return Response::make(false,404,"Invalid table $tableName");
+
+        $this->dbdrv->where("id in ('$recId')");
+        $this->dbdrv->delete($tableName);
+        if($this->dbdrv->affected_rows()) {
+            return Response::make(true,204,null);
+        }
+        return Response::make(false,404,"Not found");
+    }
+
+    /**
+     * validates if object is valid
+     * @param $data
+     * @return bool
+     * @todo to implemet check on controller side => delete from here
+     */
+    private function is_valid_resource($data) {
+        return property_exists($data,"type") && property_exists($data,"id");
+    }
+
+    /**
+     * create relationship (new)
+     * @param $srcTbl
+     * @param $srcId
+     * @param $relation
+     * @param $data
+     * @return Response
+     */
+    function create_relationships($srcTbl,$srcId,$relation,$data) {
+        if(!is_array($data))
+            $data = array($data);
+        try {
+            $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
+
+            $this->dm->get_rel_target_tbl($srcTbl,$relation);
+            $insData = array();
+            foreach($data as $item) {
+                $insData[] = array($srcTbl."_id"=>$srcId,$item->type."_id"=>$item->id);
+            }
+
+            //$this->db->db_debug = FALSE;
+            $this->dbdrv->trans_start();
+            $this->dbdrv->insert_batch($lnkTbl,$insData);
+            $this->dbdrv->trans_complete();
+            $this->dbdrv->db_debug = TRUE;
+            if ($this->dbdrv->trans_status() === FALSE) {
+                $this->dbdrv->trans_rollback();
+                return Response::make(false,404,"Insert failed");
+            }
+            else {
+                $this->dbdrv->trans_commit();
+                return Response::make(true,204);
+            }
+
+        }
+        catch(Exception $e) {
+            print_r($e);
+        }
+    }
+
+
+    /**
+     * updates relationships
+     *
+     * @param string $srcTbl source table name
+     * @param string $srcId id of source Record
+     * @param string $relation relationship name
+     * @param mixed $data relation data
+     * @return Response
+     *
+     * @todo Review code
+     */
+    function update_relationships($srcTbl,$srcId,$relation,$data) {
+        if(!$this->dm->is_valid_table($srcTbl))
+            return Response::make(false,404,"Invalid table $srcTbl");
+
+        if(!$this->dm->is_valid_relation($srcTbl,$relation))
+            return Response::make(false,404,"Invalid relation $relation");
+
+        $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
+        $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
+        if($this->dm->get_rel_type($srcTbl,$relation)=="1:1")
+            if(is_object($data))
+                if($data==null)
+                    $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
+                else
+                    if($this->is_valid_resource($data))
+                        if($data->type==$tgtTbl) {
+                            $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
+                            $this->dbdrv->insert($lnkTbl,array($srcTbl."_id"=>$srcId,$tgtTbl."_id"=>$data->id));
+                            return Response::make(true,204);
+                        }
+                        else
+                            return Response::make(false,400,"Invalid relation data type");
+                    else
+                        return Response::make(false,404,"Invalid relation data");
+            else
+                return Response::make(false,400,"Invalid relation data");
+        elseif($this->dm->get_rel_type($srcTbl,$relation)=="1:n")
+            if(is_array($data))
+                if(count($data)==0)
+                    $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
+                else {
+                    $insData = array();
+                    $dataSize = count($data);
+                    foreach($data as $idx=>$item)
+                        if($this->is_valid_resource($item))
+                            if($item->type==$tgtTbl)
+                                $insData[] = array($srcTbl."_id"=>$srcId,$tgtTbl."_id"=>$item->id);
+                            else
+                                unset($data[$idx]);
+                        else
+                            unset($data[$idx]);
+                    if(count($insData)) {
+                        $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
+                        $this->dbdrv->insert($lnkTbl,$insData);
+                        if(count($data)!=$dataSize)
+                            return Response::make(true,200,$data);
+                        else
+                            return Response::make(true,204);
+                    }
+                }
+            else
+                return Response::make(false,400,"Invalid relation data");
+        else
+            return Response::make(false,500,"Invalid relation config on server side");
+
+        return Response::make(false,500,"Invalid relation config on server side");
+    }
+
+    /**
+     * delete relationships
+     *
+     * @param string $srcTbl source table name
+     * @param string $srcId id of source Record
+     * @param string $relation relationship name
+     * @param array $data rel data
+     * @return Response
+     */
+    function delete_relationship($srcTbl,$srcId,$relation,$data) {
+
+        if(!$this->dm->is_valid_table($srcTbl))
+            return Response::make(false,404,"Invalid table $srcTbl");
+
+        if(!$this->dm->is_valid_relation($srcTbl,$relation))
+            return Response::make(false,404,"Invalid relation $relation");
+
+        $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
+        $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
+
+        switch($this->dm->get_rel_type($srcTbl,$relation)) {
+            case "1:1":
+                if(is_object($data))
+                    if(property_exists($data,"type") && property_exists($data,$id))
+                        if($data->type==$tgtTbl)
+                            $deleteWhere = "{$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$data->id'";
+                        else
+                            return Response::make(false,400,"Invalid input data");
+                    else
+                        return Response::make(false,400,"Invalid input data");
+                else
+                    return Response::make(false,400,"Invalid input data");
+                $this->dbdrv->where($deleteWhere)->delete($lnkTbl);
+                break;
+            case "1:n":
+                $deleteWhere = array();
+                if(is_array($data))
+                    foreach($data as $idx=>$item)
+                        if(property_exists($item,"type") && property_exists($item,"id"))
+                            if($item->type==$tgtTbl)
+                                $deleteWhere[] = "({$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$item->id')";
+                            else
+                                return Response::make(false,400,"Invalid input data");
+                        else
+                            return Response::make(false,400,"Invalid input data");
+                else
+                    return Response::make(false,400,"Invalid input data");
+
+                $this->dbdrv->where(implode(" OR ",$deleteWhere))->delete($lnkTbl);
+                break;
+            default:
+                return Response::make(false,500,"Invalid config");
+        }
+
+        return Response::make(true,204);
+    }
+
+    /**
+     * create relationship old
+     * @param string $srcTbl source table
+     * @param string $srcId source Record id
+     * @param string $relation relation name
+     * @param mixed $data relation data
+     * @return Response
+
+    function __create_relationships($srcTbl,$srcId,$relation,$data) {
+    if(!$this->dm->is_valid_table($srcTbl))
+    return Response::make(false,404,"Invalid table $srcTbl");
+
+    if(!$this->dm->is_valid_relation($srcTbl,$relation))
+    return Response::make(false,404,"Invalid relation $relation");
+
+    $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
+    $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
+
+    $dataSize = count($data);
+    $insData = array();
+    $invalidData = array();
+    $insDataMirror = array();
+
+    if($this->dm->get_rel_type($srcTbl,$relation)=="1:1") {
+    if(is_object($data)) {
+    if($this->is_valid_resource($data))
+    if($data->type==$tgtTbl) {
+    $insDataMirror[] = $data;
+    $insData[] = array($srcTbl."_id"=>$srcId,$data->type."_id"=>$data->id);
+    }
+    else {
+    $invalidData[]= $data;
+    return Response::make(false,400,array("Invalid relation data type",$invalidData));
+    }
+    else {
+    $invalidData[]= $data;
+    return Response::make(false,400,array("Invalid relation data object format",$invalidData));
+    }
+    }
+    else {
+    $invalidData[]= $data;
+    return Response::make(false,400,"Invalid relation data: not an object",$invalidData);
+    }
+    }
+    elseif($this->dm->get_rel_type($srcTbl,$relation)=="1:n") {
+    if(is_array($data)) {
+    foreach($data as $idx=>$item) {
+    if($this->is_valid_resource($item))
+    if($item->type==$tgtTbl) {
+    $insDataMirror[] = $item;
+    $insData[] = array($srcTbl."_id"=>$srcId,$item->type."_id"=>$item->id);
+    }
+    else {
+    $invalidData[] = $data[$idx];
+    unset($data[$idx]);
+    }
+    else {
+    $invalidData[] = $data[$idx];
+    unset($data[$idx]);
+    }
+    }
+    }
+    else {
+    return Response::make(false,400,"Invalid relation data: not an array");
+    }
+    }
+    else {
+    return Response::make(false,500,"Invalid relation config on server side");
+    }
+
+    $db_debug = false;
+
+    if(!empty($insData)) {
+    foreach($insData as $idx=>$ins) {
+    $db_debug = $this->db->db_debug;
+    $this->db->db_debug = false;
+    $this->db->insert($lnkTbl,$ins);
+    if($this->db->affected_rows()<1) {
+    $invalidData[] = $insDataMirror[$idx];
+    unset($insData[$idx]);
+    unset($insDataMirror[$idx]);
+    }
+    }
+    }
+    $this->db->db_debug = $db_debug;
+
+    if(count($insData)!=$dataSize)
+    if(count($insData)>0)
+    return Response::make(true,200,$insDataMirror);
+    else
+    return Response::make(false,400,$insDataMirror);
+    else
+    return Response::make(true,204);
+    }
+     */
+    /**
+     * @param $table
+     * @param $id
+     * @param $relation
+     * @param null $offset
+     * @param null $limit
+     * @return Response
+     * @todo To remove after implementing the new relationhip retrieval method
+
+    function get_record_relationships($table,$id,$relation,$offset=null,$limit=null) {
+    if(!$this->dm->is_valid_table($table))
+    return Response::make(false,404,"Invalid table $table");
+
+    if(!$this->dm->is_valid_relation($table,$relation))
+    return Response::make(false,404,"related $relation not found");
+
+    $lnkTbl = $this->dm->get_rel_link_tlb($table,$relation);
+    $tgtTbl = $this->dm->get_rel_target_tbl($table,$relation);
+    $tmpFldName = ($tgtTbl."_id");
+    $q = $this->db->get_where($lnkTbl,array($table."_id"=>$id));
+    list($totalRecs,$res) = $this->select_query($lnkTbl,null,null,array($table."_id='$id'"));
+
+    $data = array();
+    if($totalRecs>0){
+    foreach($res->result() as $rec){
+    $objRec = new stdClass();
+    $objRec->id = $rec->{$tgtTbl."_id"};
+    $objRec->type = $tgtTbl;
+    $data[] = $objRec;
+    }
+    }
+
+    return Response::make(true,200,$this->build_return_obj($totalRecs,$data,$offset));
+    return Response::make(false,404);
+    }
+     */
+    /**
+     * @param $table
+     * @param $id
+     * @param $relation
+     * @param $includes
+     * @param $fields
+     * @param $filter
+     * @param $offset
+     * @param $limit
+     * @param $order
+     * @return Response
+     * @todo To remove after implementing the new relationhip retrieval method
+
+    function get_related_table_records($table,$id,$relation,$includes,$fields,$filter,$offset,$limit,$order) {
+    if(!$this->dm->is_valid_table($table))
+    return Response::make(false,404,"Invalid table $table");
+
+    // validate relation
+    if(!$this->dm->is_valid_relation($table,$relation))
+    return Response::make(false,404,"related $relation not found");
+
+    $tgtTbl = $this->dm->get_rel_target_tbl($table,$relation);
+    $lnkTbl = $this->dm->get_rel_link_tlb($table,$relation);
+    $from = $tgtTbl;
+    $queryFromArr = array($tgtTbl,$lnkTbl);
+
+    // build left join
+    $leftJoinArr[] = "LEFT JOIN $lnkTbl ON $lnkTbl.{$tgtTbl}_id=$tgtTbl.id";
+    // add where condition
+    $whereArr[] = "$lnkTbl.{$table}_id='$id'";
+
+    $fields = $this->clean_up_fields($fields);
+    $orderByArr = $this->generate_order_arr($order,$queryFromArr);
+
+    foreach($filter as $flt) {
+    $whereArr[] = $this->generate_where_str($flt,$from);
+    }
+
+    list($totalRecs,$res) = $this->select_query($from,$fields,$leftJoinArr,$whereArr,$orderByArr,$offset,$limit);
+
+    $data = array();
+    $includedObjects = null;
+    if($totalRecs>0){
+    foreach($res->result() as $rec){
+    $objRec = $this->gml->recAsResObject($rec,$from);
+    $data[$objRec->id] = $objRec;
+    }
+    $includedObjects = $this->get_includes($data,$from,$fields,$includes,$filter,$order);
+    }
+
+    return Response::make(true,200,$this->build_return_obj($totalRecs,$data,$offset,$includedObjects));
+    }
+     * */
+    /**
+     * @param $data
+     * @param $tableName
+     * @param $fields
+     * @param $includes
+     * @param $filter
+     * @param $order
+     * @return array
+
+    private function get_includes(&$data, $tableName, $fields, $includes, $filter, $order) {
+    //print_r($filter);
+    $ids = $this->get_ids($data);
+    $includeArr = [];
+    foreach($includes as $idx=>$relation) {
+    if(!$this->dm->is_valid_relation($tableName,$relation)){
+    unset($includes[$idx]);
+    break;
+    }
+
+    $tgtTbl = $this->dm->get_rel_target_tbl($tableName,$relation);
+    $lnkTbl = $this->dm->get_rel_link_tlb($tableName,$relation);
+    $relType = $this->dm->get_rel_type($tableName,$relation);
+
+    $whereArr = [];
+    if(array_key_exists($tgtTbl,$filter)) {
+    foreach($filter[$tgtTbl] as $flt) {
+    $whereArr[] = generate_where_str($flt,$tgtTbl);
+    }
+    }
+
+    $orderByArr = [];
+    foreach($order as $item) {
+    if($item["table"]==$tgtTbl) {
+    array_push($orderByArr,$item);
+    }
+    }
+    $orderByArr = $this->generate_order_arr($orderByArr,array($tgtTbl));
+
+    $sql = sprintf("SELECT %s,%s_id as relObjId FROM %s
+    LEFT JOIN %s ON %s.id=%s.%s_id
+    WHERE %s.%s_id IN (%s) AND ".(empty($whereArr)?"1":implode(" AND ",$whereArr)).
+    " ORDER BY %s",
+    array_key_exists($tgtTbl,$fields) && !empty($fields[$tgtTbl])?
+    $tgtTbl.".".implode(", {$tgtTbl}.",$fields[$tgtTbl]):
+    $tgtTbl.".*",
+    $tableName,$tgtTbl,$lnkTbl,$tgtTbl,$lnkTbl,$tgtTbl,$lnkTbl,$tableName,implode(",",$ids),
+    (count($orderByArr)?implode(",",$orderByArr):"1"))."\n";
+    //echo $sql;
+    $q = $this->db->query($sql);
+
+    foreach($q->result() as $rec) {
+    $relObjId = $rec->relObjId;
+    if(!property_exists($data[$relObjId],"relationships"))
+    $data[$relObjId]->relationships = [];
+    if(!array_key_exists($tgtTbl,$data[$relObjId]->relationships))
+    $data[$relObjId]->relationships[$tgtTbl] = [];
+
+    unset($rec->relObjId);
+    $objRec = $this->gml->recAsResObject($rec,$tgtTbl);
+    if($relType=="1:1")
+    $data[$relObjId]->relationships[$tgtTbl] = ["type"=>$objRec->type,"id"=>$objRec->id];
+    else
+    $data[$relObjId]->relationships[$tgtTbl][] = ["type"=>$objRec->type,"id"=>$objRec->id];
+
+    if(!in_array($objRec,$includeArr))
+    $includeArr[] = $objRec;
+    }
+
+    }
+    return ($includeArr);
+    }
+     */
+    /**
+     * @param $tableName
+     * @param $recIds
+     * @param $relationName
+     * @param array $fields
+     * @param array $filter
+     * @param array $sort
+     * @return null|Response
+
+    function get_relation_records($tableName, $recIds, $relationName, $fields=[], $filter=[], $sort=[]) {
+    if(!$this->dm->is_valid_table($tableName))
+    return Response::make(false,404,"Invalid table $tableName");
+
+    $relCfg = $this->dm->get_relation_config($tableName,$relationName);
+
+    $where = array();
+    foreach(array($relCfg->lnkTable,$relCfg->table) as $tbl)
+    if(isset($filter[$tbl]))
+    $where = "$tbl.".implode(" AND $tbl.",$filter[$tbl]);
+
+    $orderBy = array();
+    foreach($sort as $item)
+    if(array_search($item["table"],array($relCfg->lnkTable,$relCfg->table))!==false)
+    $orderBy[] = $item["table"].".".$item["fld"]." ".$item["dir"];
+
+
+    $sql = "SELECT ".(empty($fields)?($relCfg->table."*"):"")."
+    FROM $relCfg->lnkTable
+    INNER JOIN $relCfg->table
+    ON $relCfg->table.id=$relCfg->lnkTable.$relCfg->targetIdMapFld
+    WHERE $relCfg->lnkTable.$relCfg->sourceIdMapFld IN ('".implode("','",$recIds)."') AND ".implode(" AND ",$where)."
+    ORDER BY ".implode(", ",$orderBy)."
+    LIMIT 0,".$this->config->item("default_result_set_limit");
+
+    //echo $sql;
+    return null;
+    }
+     *  */
+    /**
+     * perform query
+     *
+     * @param string $from table from where to select
+     * @param array $joins
+     * @param array $whereArr where array
+     * @param array $orderByArr order by array
+     * @param int $offset
+     * @param int $limit
+     * @return array (int totalRecs,DBRecordset $res)
+
+    private function select_query($from, $joins, $whereArr=null, $orderByArr=null, $offset=null, $limit=null) {
+    // prepare selected fields statement
+    $fldsArr = [];
+    $fldsArr[] = $from["table"].".".implode(",".$from["table"].".",$from["fields"]);
+
+
+    // prepare JOIN statement
+    $joinArr = [];
+    foreach ($joins as $fld=>$join) {
+    $fldsArr[] = $join["alias"].".".implode(",".$join["alias"].".",$join["fields"]);
+    $joinArr[] = sprintf("LEFT JOIN %s AS %s ON %s=%s",$join["table"], $join["alias"], $join["left"], $join["right"]);
+    }
+
+    // prepare where statement
+    $sqlWhere = 1;
+    if(!empty($whereArr))
+    $sqlWhere = implode(" AND ",$whereArr);
+
+    // prepare order statement
+    $sqlOrder = "1";
+    if(!empty($orderByArr))
+    $sqlOrder = implode(", ",$orderByArr);
+
+    // prepare limit statement
+    $sqlLimit = "";
+    if(is_numeric($offset) && is_numeric($limit))
+    $sqlLimit = "LIMIT $offset,$limit";
+
+    $countSql = sprintf("SELECT count(*) as cnt FROM %s %s WHERE %s",
+    $from["table"],
+    implode(" ", $joinArr),
+    $sqlWhere);
+    //echo $countSql."\n";
+    $totalRecs = $this->db->query($countSql)->row()->cnt;
+
+    if($totalRecs) {
+    $mainSql = sprintf("SELECT %s FROM %s %s WHERE %s ORDER BY %s %s",
+    implode(",", $fldsArr),
+    $from["table"],
+    implode(" ", $joinArr),
+    $sqlWhere,
+    $sqlOrder,
+    $sqlLimit
+    );
+    }
+    else
+    $mainSql = "SELECT 1 from DUAL where false";
+
+    return array($totalRecs,$this->db->query($mainSql));
+    }
+     */
+}
+    

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DBApiator Setup</title>
+    <style>
+        body {margin:0 0 50px 0;font-size:13px;color:#222;font-family:arial,lucida,tahoma, helvetica, verdana;}
+        ul,li{
+            list-style: none;
+            margin: 0px;
+            padding: 0px;
+        }
+        li{
+            background: #e6e6e6;
+            padding: 5px;
+            margin-top: 5px;
+        }
+        li:hover{
+            background: #fffede;
+        }
+        li>.status{
+            float: right;
+        }
+        .center {
+            margin: auto;
+            width: 50%;
+            border: 2px solid #858585;
+            padding: 10px;
+        }
+        .ok{
+            color: green;
+        }
+        .nok{
+            color: red;
+        }
+    </style>
+</head>
+<body>
+<div class="center">
+    <h1>Prerequisites</h1>
+    <ul>
+        <li data-target="version">
+            DBApiator
+            <span class="status">Status</span>
+        </li>
+        <li data-target="general_config">
+            Platform configuration file rights
+            <span class="status">Status</span>
+        </li>
+        <li data-target="database_config">
+            Database configuration file rights
+            <span class="status">Status</span>
+        </li>
+    </ul>
+</div>
+<script src="https://code.jquery.com/jquery-1.12.4.min.js"
+        integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ="
+        crossorigin="anonymous"></script></body>
+<script>
+    $(document).ready(function(){
+        $("li[data-target]").each(function(i){
+            var $src = $(this);
+            $.ajax("index.php?action="+$src.attr("data-target"))
+                .done(function (data) {
+                    console.log(data);
+                    $src.children("span").html(data.message).addClass(data.result?"ok":"nok");
+
+                })
+        })
+    })
+</script>
+
+</body>
+</html>

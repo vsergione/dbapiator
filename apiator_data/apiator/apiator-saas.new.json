@@ -1,0 +1,614 @@
+{
+    "connection": {
+        "host": "localhost",
+        "type": "mysqli",
+        "username": "root",
+        "password": "parola123",
+        "database": "apiator-saas"
+    },
+    "settings": [],
+    "structure": {
+        "departments": {
+            "fields": {
+                "id": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null,
+                    "referencedBy": [
+                        {
+                            "table": "users",
+                            "field": "department"
+                        }
+                    ]
+                },
+                "name": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "20"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "id"
+        },
+        "groups": {
+            "fields": {
+                "id": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null,
+                    "referencedBy": [
+                        {
+                            "table": "usergroups",
+                            "field": "group_id"
+                        }
+                    ]
+                },
+                "name": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "30"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": true,
+                    "required": true,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "id"
+        },
+        "oauth2_access_tokens": {
+            "fields": {
+                "access_token": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "100"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": true,
+                    "required": true,
+                    "default": null
+                },
+                "client_id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "80"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "user_id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "255"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null,
+                    "foreignKey": {
+                        "table": "users",
+                        "field": "username"
+                    }
+                },
+                "expires": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "scope": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "2000"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "access_token"
+        },
+        "oauth2_clients": {
+            "fields": {
+                "id": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "name": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "80"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": true,
+                    "required": true,
+                    "default": null
+                },
+                "secret": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "80"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "redirect_uri": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "2000"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "grant_types": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "80"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "scope": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "100"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "user_id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "80"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "id"
+        },
+        "oauth2_refresh_tokens": {
+            "fields": {
+                "refresh_token": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "40"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": true,
+                    "required": true,
+                    "default": null
+                },
+                "client_id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "80"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "user_id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "255"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "expires": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "scope": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "2000"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "refresh_token"
+        },
+        "oauth2_users": {
+            "fields": {
+                "id": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "username": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "255"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": true,
+                    "required": true,
+                    "default": null
+                },
+                "passwordhash": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "2000"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "first_name": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "255"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "last_name": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "255"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "active": {
+                    "type": {
+                        "proto": "tinyint",
+                        "length": "1"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": "0"
+                },
+                "template": {
+                    "type": {
+                        "proto": "tinyint",
+                        "length": "1"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": "0"
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "id"
+        },
+        "user_groups": {
+            "fields": {
+                "username": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "30"
+                    },
+                    "hidden": false,
+                    "allowinsert": false,
+                    "allowupdate": false,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "group_id": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "hidden": false,
+                    "allowinsert": false,
+                    "allowupdate": false,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "name": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "30"
+                    },
+                    "hidden": false,
+                    "allowinsert": false,
+                    "allowupdate": false,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "view"
+        },
+        "usergroups": {
+            "fields": {
+                "username": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "30"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null,
+                    "foreignKey": {
+                        "table": "users",
+                        "field": "username"
+                    }
+                },
+                "group_id": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null,
+                    "foreignKey": {
+                        "table": "groups",
+                        "field": "id"
+                    }
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": null
+        },
+        "users": {
+            "fields": {
+                "username": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "30"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": true,
+                    "required": true,
+                    "default": null,
+                    "referencedBy": [
+                        {
+                            "table": "oauth2_access_tokens",
+                            "field": "user_id"
+                        },
+                        {
+                            "table": "usergroups",
+                            "field": "username"
+                        }
+                    ]
+                },
+                "email": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "50"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": true,
+                    "required": true,
+                    "default": null
+                },
+                "passwordhash": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "100"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "department": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null,
+                    "foreignKey": {
+                        "table": "departments",
+                        "field": "id"
+                    }
+                },
+                "last_active": {
+                    "type": {
+                        "proto": "timestamp"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": "CURRENT_TIMESTAMP"
+                },
+                "activation_code": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "50"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "active": {
+                    "type": {
+                        "proto": "tinyint",
+                        "length": "1"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": "1"
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "username"
+        }
+    }
+}

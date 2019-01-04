@@ -1,0 +1,964 @@
+{
+    "connection": {
+        "host": "localhost",
+        "type": "mysqli",
+        "username": "root",
+        "password": "parola123",
+        "database": "randata"
+    },
+    "settings": [],
+    "structure": {
+        "adjNode": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "10"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "name": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "type": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "btsName": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "siteidx": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "nodebId": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "transType": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "dsp": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "ippath": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "adjNode": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "loIpAddr": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "peerIpAddr": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "pathId": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "ifaceType": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "iprt": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "subrack": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "slot": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "destIpAddr": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "destNetMask": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "nextHop": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "label": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "ips": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "50"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "ipAddr": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "netmask": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "type": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "subrack": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "slot": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "label": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "m3lks": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "dsp": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "label": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "m3lnk": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "sctpLnkId": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "label": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "lnkSet": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "n7dpc": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "name": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "type": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "code": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "nes": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": true,
+                    "required": true,
+                    "default": null
+                },
+                "type": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "oamIp": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "sctp": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "id": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "appType": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "mode": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "loIp1": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "loIp2": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "loPortNo": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "peerIp1": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "peerIp2": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "peerPortNo": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        },
+        "vlans": {
+            "fields": {
+                "idx": {
+                    "type": {
+                        "proto": "int",
+                        "length": "11"
+                    },
+                    "insert": false,
+                    "update": false,
+                    "select": true,
+                    "iskey": true,
+                    "required": false,
+                    "default": null
+                },
+                "ne": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "vlanId": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "nextHopIp": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": true,
+                    "default": null
+                },
+                "subrack": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                },
+                "slot": {
+                    "type": {
+                        "proto": "varchar",
+                        "length": "45"
+                    },
+                    "insert": true,
+                    "update": true,
+                    "select": true,
+                    "iskey": false,
+                    "required": false,
+                    "default": null
+                }
+            },
+            "type": "table",
+            "update": true,
+            "delete": true,
+            "create": true,
+            "read": true,
+            "keyFld": "idx"
+        }
+    }
+}
