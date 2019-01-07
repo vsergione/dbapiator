@@ -6,11 +6,14 @@
  * Time: 8:40 AM
  */
 
+/**
+ * Class Home
+ * @property CI_Loader $load
+ */
 class Home extends CI_Controller
 {
     function index()
     {
-        http_response_code(301);
-        header("Location: /proteus/admin/dashboard");
+        $this->load->view("welcome_message");
     }
 }

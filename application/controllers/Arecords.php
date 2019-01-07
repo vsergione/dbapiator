@@ -388,12 +388,6 @@ class Arecords extends CI_Controller
 
     }
 
-    function listRecordsFromView($owner,$apiName,$tblName)
-    {
-        echo "listRecordsFromViews";
-        print_r(func_get_args());
-    }
-
 
     function options($reqType)
     {
