@@ -3,16 +3,16 @@ namespace Apiator\DBApi;
 
 
 
-require_once(__DIR__."/../../../libraries/Response.php");
+//require_once(__DIR__."/../../../libraries/Response.php");
 require_once(__DIR__."/../../../libraries/Errors.php");
 require_once(__DIR__.'/../../../libraries/RecordSet.php');
 
 
-require_once(__DIR__."/../../../libraries/HttpResp.php");
-require_once(__DIR__."/../../../helpers/manager_helper.php");
+//require_once(__DIR__."/../../../libraries/HttpResp.php");
 
 /**
  * Class Records
+ * core class for manipulating the records in the Database
  */
 class Records {
     /**
@@ -83,7 +83,7 @@ class Records {
     private function clean_up_fields($fields) {
         // cleanup fields and add id field when not existing
         foreach($fields as $tbl=>$flds) {
-            if(!$this->dm->is_valid_table($tbl)) {
+            if(!$this->dm->is_valid_resource($tbl)) {
                 unset($fields[$tbl]);
             }
             else {
@@ -122,7 +122,7 @@ class Records {
 
 
     /**
-     * @param string $table
+     * @param string $resName
      * @param array $includes
      * @param array $fields
      * @param array $filters
@@ -131,16 +131,16 @@ class Records {
      * @param array $order
      * @return \RecordSet
      */
-    function get_records($table, $includes, $fields, $filters, $offset=0, $limit=10, $order=[]) {
+    function get_records($resName, $includes, $fields, $filters, $offset=0, $limit=10, $order=[]) {
         //echo "get records";
         // validate main inputs
 
         //$queryFromArr = [$table];
         $includedFields = [];
-        $includedFields[$table] = [];
+        $includedFields[$resName] = [];
 
         $from = [
-            "table"=>$table,
+            "table"=>$resName,
             "fields"=> [],
             "order"=> [],
             "where"=> []
@@ -150,16 +150,17 @@ class Records {
         // generate join & part of the fields Arr
         $joinArr = [];
         foreach ($includes as $include) {
-            $fk = $this->dm->get_fk_relation($table,$include);
+            $fk = $this->dm->get_fk_relation($resName,$include);
 
             if($fk->success) {
                 $rel = $fk->data;
-                $alias = sprintf("%s_%s",$include,$rel->table);
+
+                $alias = sprintf("%s_%s",$include,$rel["table"]);
                 $joinArr[$include] = [
-                    "table" => $rel->table,
+                    "table" => $rel["table"],
                     "alias"=> $alias,
-                    "left"=>$alias.".".$rel->field,
-                    "right"=>$table.".".$include,
+                    "left"=>$alias.".".$rel["field"],
+                    "right"=>$resName.".".$include,
                     "fields"=> [],
                     "order"=> [],
                     "where"=> []
@@ -167,7 +168,7 @@ class Records {
 
                 if(isset($fields[$include])) {
                     foreach ($fields[$include] as $fld)
-                        if($this->dm->is_valid_field($rel->table,$fld))
+                        if($this->dm->is_valid_field($rel["table"],$fld))
                             array_push($joinArr[$include]["fields"],$fld);
                 }
 
@@ -179,9 +180,9 @@ class Records {
         }
 
         // take care  of the from part
-        if(isset($fields[$table])) {
-            foreach ($fields[$table] as $fld)
-                if ($this->dm->is_valid_field($table, $fld))
+        if(isset($fields[$resName])) {
+            foreach ($fields[$resName] as $fld)
+                if ($this->dm->is_valid_field($resName, $fld))
                     array_push($from["fields"], $fld);
         }
 
@@ -197,8 +198,8 @@ class Records {
         // ORDER BY array generation
         $orderByArr = [];
         foreach ($order as $item) {
-            if($item->alias==$table && $this->dm->is_valid_field($table,$item->fld))
-                $orderByArr[] = sprintf("%s.%s %s",$table,$item->fld,$item->dir);
+            if($item->alias==$resName && $this->dm->is_valid_field($resName,$item->fld))
+                $orderByArr[] = sprintf("%s.%s %s",$resName,$item->fld,$item->dir);
             if(isset($joinArr[$item->alias]) && $this->dm->is_valid_field($joinArr[$item->alias]["table"],$item->fld))
                 $orderByArr[] = sprintf("%s.%s %s",$joinArr[$item->alias]["alias"],$item->fld,$item->dir);
         }
@@ -207,8 +208,8 @@ class Records {
         // generate $whereArr
         $whereArr = [];
         foreach ($filters as $filter) {
-            if($filter->left->alias==$table
-                && $this->dm->is_searchable_field($table,$filter->left->field)) {
+            if($filter->left->alias==$resName
+                && $this->dm->is_searchable_field($resName,$filter->left->field)) {
                 $whereArr[] = generate_where_str($filter);
 
             }
@@ -230,7 +231,7 @@ class Records {
             $mainSql = "SELECT 1 from DUAL where false";
         $res = $this->dbdrv->query($mainSql);
         //echo $this->dbdrv->last_query();
-        $recordSet = new \RecordSet([],$table,$this->dm->get_idfld($table), $offset,$totalRecs);
+        $recordSet = new \RecordSet([],$resName,$this->dm->get_idfld($resName), $offset,$totalRecs);
 
         if($from["fields"][0]=="*") {
             $from["fields"] = array_keys($this->dm->get_fields($from["table"]));
@@ -249,7 +250,7 @@ class Records {
             for($i=0;$i<count($from["fields"]);$i++) {
                 $tmp[$from["fields"][$i]] = $row[$i];
             }
-            $newRec = $recordSet->add_record($table,$tmp,$this->dm->get_idfld($table));
+            $newRec = $recordSet->add_record($resName,$tmp,$this->dm->get_idfld($resName));
             $recOffset = count($from["fields"]) ;
             foreach ($joinArr as $fld=>$join) {
                 $tmp = [];
@@ -273,7 +274,6 @@ class Records {
     }
 
 
-
     /**
      * create new Record
      * TODO: clarify best approach about what to return after inserting OK....
@@ -281,50 +281,73 @@ class Records {
      *
      * @param string $table
      * @param object $data
-     * @param null|array $fieldsToUpdate fields to update in case of duplicate
-     * @param  array $options
+     * @param $recursive
+     * @param string $onDuplicate
+     * @param String[] $updateFields
      * @return \Response
      */
-    function create($table, $data, $fieldsToUpdate, $options) {
+    function insert($table, $data, $recursive, $onDuplicate, $updateFields) {
         // validate attributes
-        //print_r($data);
         $resp = $this->dm->validate_object_attributes($table,$data,"ins");
-        if(!$resp->success)
+
+        if(!$resp->success) {
             return $resp;
+        }
+
         $attributes = $resp->data;
 
-        $idFld = $this->dm->get_idfld($table);
+        $idFld = $this->dm->get_key_fld($table);
 
 
+        // call recursive create for embedded records
         foreach($attributes as $name=>$value) {
-            if(is_object($value)) {
+            if(is_object($value) && $recursive) {
                 // insert first embeded objects
-                $resp = is_valid_data($value);
-                if(!$resp->success)
+
+                try{
+                    is_valid_post_data($value);
+                }
+                catch (Exception $e) {
                     return $resp;
+                }
+
 
                 $value = $value->data;
 
-                $resp = $this->create($value->type,$value->attributes,$fieldsToUpdate,$options);
+                $resp = $this->insert($value->type, $value->attributes, $recursive, $onDuplicate, $updateFields);
 
-                if(!$resp->success)
+                if (!$resp->success)
                     return $resp;
+                // print_r($resp->success);
                 $attributes->$name = $resp->data;
             }
         }
 
 
+        // print_r($attributes);
         $insSql = $this->dbdrv->insert_string($table,$attributes);
 
-        $updStr = in_array("duplicateUpdate",$options)?["$idFld=$idFld"]:[];
-        if(!empty($fieldsToUpdate[$table])) {
-            foreach($fieldsToUpdate[$table] as $fld) {
-                if($this->dm->is_field_updateable($table,$fld) && isset($attributes->$fld)) {
-                    $updStr[] = "$fld=VALUES($fld)";
+        // configure behaviour to update fields when
+        if($onDuplicate=="update") {
+            $updStr = [];
+            if (!empty($updateFields[$table])) {
+                foreach ($updateFields[$table] as $fld) {
+                    if ($this->dm->is_field_updateable($table, $fld) && isset($attributes->$fld)) {
+                        $updStr[] = "$fld=VALUES($fld)";
+                    }
                 }
             }
+            if(count($updStr))
+                $insSql .= " ON DUPLICATE KEY UPDATE " . implode(",", $updStr);
+            else
+                return \Response::make(false, 400, "Invalid fields to be updated");
         }
-        $insSql .= (in_array("duplicateUpdate",$options)?" ON DUPLICATE KEY UPDATE ":" ").implode(",",$updStr);
+
+        if($onDuplicate=="ignore") {
+            if($idFld)
+                $insSql .= " ON DUPLICATE KEY UPDATE $idFld=$idFld";
+        }
+
 
         if(!$this->dbdrv->query($insSql))
             return \Response::make(false, 500, $this->dbdrv->error()["message"]);
@@ -411,10 +434,15 @@ class Records {
      * @return \Response
      */
     function delete($tableName, $recId) {
-        if(!$this->dm->is_valid_table($tableName))
-            return \Response::make(false,404,"Invalid table $tableName");
+        /**
+         * TODO same check should be used in OPTIONS response
+         */
+        if(!$this->dm->delete_allowed($tableName))
+            return \Response::make(false,400,"Delete not allowed on table $tableName");
 
-        $this->dbdrv->where("id in ('$recId')");
+        $idFld = $this->dm->get_key_fld($tableName);
+
+        $this->dbdrv->where("$idFld in ('$recId')");
         $this->dbdrv->delete($tableName);
         if($this->dbdrv->affected_rows()) {
             return \Response::make(true,204,null);
@@ -486,7 +514,7 @@ class Records {
      * @todo Review code
      */
     function update_relationships($srcTbl,$srcId,$relation,$data) {
-        if(!$this->dm->is_valid_table($srcTbl))
+        if(!$this->dm->is_valid_resource($srcTbl))
             return \Response::make(false,404,"Invalid table $srcTbl");
 
         if(!$this->dm->is_valid_relation($srcTbl,$relation))
@@ -554,7 +582,7 @@ class Records {
      */
     function delete_relationship($srcTbl,$srcId,$relation,$data) {
 
-        if(!$this->dm->is_valid_table($srcTbl))
+        if(!$this->dm->is_valid_resource($srcTbl))
             return \Response::make(false,404,"Invalid table $srcTbl");
 
         if(!$this->dm->is_valid_relation($srcTbl,$relation))

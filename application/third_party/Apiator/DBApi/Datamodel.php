@@ -1,7 +1,7 @@
 <?php
 namespace Apiator\DBApi;
 
-require_once(__DIR__."/../../../libraries/Response.php");
+//require_once(__DIR__."/../../../libraries/Response.php");
 
 use Response;
 
@@ -57,6 +57,17 @@ class Datamodel {
 
         return $this->dataModel[$tableName];
     }
+
+    /**
+     * return name of the field used as primary key
+     * @param $resName
+     * @return mixed
+     */
+    function get_key_fld($resName)
+    {
+        return $this->dataModel[$resName]["keyFld"];
+    }
+
 
 
     /**
@@ -136,12 +147,12 @@ class Datamodel {
     }
 
     /**
-     * checks if table exists
+     * checks if resource exists
      * @param string $name
      * @return boolean true if exists, false otherwise
      */
-    function is_valid_table($name) {
-        return array_key_exists($name,$this->dataModel) && $this->dataModel[$name]["type"]=="table";
+    function is_valid_resource($name) {
+        return array_key_exists($name,$this->dataModel);
     }
 
     /**
@@ -186,7 +197,7 @@ class Datamodel {
      * @return bool
      */
     function is_valid_field($tableName, $fieldName) {
-        return $this->is_valid_table($tableName) && array_key_exists($fieldName,$this->dataModel[$tableName]["fields"]);
+        return $this->is_valid_resource($tableName) && array_key_exists($fieldName,$this->dataModel[$tableName]["fields"]);
     }
 
     /**
@@ -211,17 +222,18 @@ class Datamodel {
     }
 
     /**
-     * @param $table
+     * @param $resName
      * @param $field
      * @return Response
      */
-    function get_fk_relation($table,$field) {
-        if(!$this->is_valid_field($table,$field))
+    function get_fk_relation($resName, $field) {
+        if(!$this->is_valid_field($resName,$field))
             return Response::make(false,500,"Invalid field");
-        if(!property_exists($this->dataModel->$table->fields->$field,"foreignKey"))
-            return Response::make(false,500,"Invalid attribute");
 
-        return Response::make(true,null,$this->dataModel[$table]["fields"][$field]["foreignKey"]);
+        if(!isset($this->dataModel[$resName]["fields"][$field]["foreignKey"]))
+            return Response::make(false,404);
+
+        return Response::make(true,null,$this->dataModel[$resName]["fields"][$field]["foreignKey"]);
     }
 
     /**
@@ -269,6 +281,7 @@ class Datamodel {
         if(!$fields[$fieldName]["required"] && is_null($value))
             return Response::make(true, 200, null);
 
+        //print_r($value);
         if(is_object($value)) {
             if (array_key_exists("foreignKey", $fields[$fieldName])
                 && $fields[$fieldName]["foreignKey"]["table"] == $value->data->type) {
@@ -413,87 +426,84 @@ class Datamodel {
     }
 
     /**
-     * checks if field can be used in where condition;
+     * checks if field is searcheable
      * defaults to yes when no searchable fld present in the field config
-     * @param $table
+     * @param $resName
      * @param $field
      * @return bool
      */
-    function is_searchable_field($table,$field) {
-        if(!$this->is_valid_field($table,$field))
+    function is_searchable_field($resName, $field) {
+        if(!$this->is_valid_field($resName,$field))
             return false;
-        return array_key_exists("searchable",$this->dataModel[$table]["fields"][$field])?
-            $this->dataModel[$table]["fields"][$field]["searchable"]:true;
+        return array_key_exists("searchable",$this->dataModel[$resName]["fields"][$field])?
+            $this->dataModel[$resName]["fields"][$field]["searchable"]:true;
     }
 
 
     /**
      * checks if
-     * @param $table
-     * @param $rels
+     * @param string $resName
+     * @param array $relations
      * @return array
      */
-    function validate_object_relationships($table,$rels) {
-        if(!is_object($rels))
-            return array(false,"rels is not an object");
+    function validate_object_relationships($resName, $relations) {
 
         // iterate through object properties
-        foreach($rels as $relName=>$relData) {
+        foreach($relations as $relName=> $relData) {
 
             // is it a valid relation?
-            if($this->is_valid_relation($table,$relName)) {
+            if($this->is_valid_relation($resName,$relName)) {
 
                 // validate $relData & $relData->data to be objects
                 if(!is_object($relData) || !property_exists($relData,"data")) {
-                    unset($rels->$relName);
+                    unset($relations->$relName);
                     break;
                 }
 
                 $relData = is_object($relData->data)?array($relData->data):(is_array($relData->data)?$relData->data:false);
                 if($relData===false) {
-                    unset($rels->$relName);
+                    unset($relations->$relName);
                     break;
                 }
                 foreach($relData as $idx=>$rel) {
                     if(property_exists($rel,"type") && property_exists($rel,"id")) {
-                        if($this->is_valid_related_table($table,$relName,$rel->type)) {
+                        if($this->is_valid_related_table($resName,$relName,$rel->type)) {
                             break;
                         }
                     }
-                    unset($rels->$relName->data[$idx]);
+                    unset($relations->$relName->data[$idx]);
                 }
             }
         }
 
-        return array(true,$rels);
+        return array(true,$relations);
     }
 
 
     /**
      * Validates if a field is foreignKey
-     * @param string $table
+     * @param string $resName
      * @param string $field
      * @return bool
      */
-    function is_fk_field($table,$field) {
-        if(!$this->is_valid_field($table,$field))
-            return false;
-        return array_key_exists("foreignKey",$this->dataModel[$table]["fields"][$field]);
+    function is_fk_field($resName, $field) {
+        return array_key_exists("foreignKey",$this->dataModel[$resName]["fields"][$field]);
     }
 
 
     /**
-     * @param $table
+     * @param $resName
      * @param $attrs
      * @param string $operation
      * @return Response
+     * TODO: review this method
      */
-    function validate_object_attributes($table,$attrs,$operation="ins") {
-        if(!$this->is_valid_table($table))
-            return Response::make(false,404,"table '$table' not found");
+    function validate_object_attributes($resName, $attrs, $operation="ins") {
+        if(!$this->is_valid_resource($resName))
+            return Response::make(false,404,"table '$resName' not found");
         $attrFlds = array_keys(get_object_vars($attrs));
 
-        foreach($this->dataModel[$table]["fields"] as $fldName=>$fldSpec) {
+        foreach($this->dataModel[$resName]["fields"] as $fldName=> $fldSpec) {
             if($fldSpec["required"] && is_null($fldSpec["default"]) && !in_array($fldName,$attrFlds) && $operation=="ins")
                 return Response::make(false,400,"required attribute '$fldName' not provided");
 
@@ -507,7 +517,7 @@ class Datamodel {
         }
 
         foreach($attrs as $attrName=>$attrVal) {
-            $response = $this->is_valid_value($table,$attrName,$attrVal);
+            $response = $this->is_valid_value($resName,$attrName,$attrVal);
 
             /**
              * TODO: instead of just checking if value is an object as exception when value type validation fails implement a proper mechanism inside the is_valid_value method
@@ -525,16 +535,26 @@ class Datamodel {
 
     /**
      * validate if field is key field
-     * @param $table
-     * @param $fieldName
+     * @param string $resName resource name
+     * @param string $fieldName field name
      * @return bool
      */
-    function is_key_field($table,$fieldName) {
-        $res = $this->is_valid_field($table,$fieldName);
+    function is_key_field($resName, $fieldName) {
+        $res = $this->is_valid_field($resName,$fieldName);
         if(!$res)
             return false;
 
-        return $this->dataModel->$table->fields->$fieldName->iskey;
+        return $this->dataModel->$resName->fields->$fieldName->iskey;
+    }
+
+    /**
+     * returns if it is allowed to delete records from table $tableName
+     * @param $tableName
+     * @return bool
+     */
+    function delete_allowed($tableName)
+    {
+        return isset($this->dataModel[$tableName]["delete"]) && $this->dataModel[$tableName]["delete"];
     }
 }
 

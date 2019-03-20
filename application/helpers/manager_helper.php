@@ -5,7 +5,6 @@
  * Date: 8/30/18
  * Time: 11:07 AM
  */
-require_once(__DIR__."/../libraries/Response.php");
 
 
 /**
@@ -15,35 +14,7 @@ function ctype_json() {
     header("Content-type: application/json");
 }
 
-/**
- * shortcut to output JSON
- * @param $data
- */
-function json_out($data) {
-    ctype_json();
-    echo json_encode($data);
-}
 
-/**
- * sets correct header content type for HTML
- */
-function ctype_html() {
-    header("Content-type: text/html");
-}
-
-/**
- * sets correct header content type for PLAIN TEXT
- */
-function ctype_text() {
-    header("Content-type: text/plain");
-}
-
-/**
- * sets correct header content type for XML
- */
-function ctype_xml() {
-    header("Content-type: application/xml");
-}
 
 /**
  * @param array $errs array of error objects

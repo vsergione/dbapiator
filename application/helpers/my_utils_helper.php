@@ -305,6 +305,30 @@ function get_relations($input)
 }
 
 
+function get_fields_to_update($input,$defaultTableName)
+{
+    $updateFields = [];
+
+    $fldsFromQuery = explode(",",$input->get("update"));
+    for($i=0;$i<count($fldsFromQuery);$i++) {
+        $tmp = explode(".", $fldsFromQuery[$i]);
+        if(count($tmp)==1) {
+            $tbl = $defaultTableName;
+            $fld = $tmp[0];
+        }
+        else
+            list($tbl,$fld) = [$tmp];
+
+        if(!$fld)
+            continue;
+
+        if(!isset($updateFields[$tbl]))
+            $updateFields[$tbl] = [];
+        $updateFields[$tbl][] = $fld;
+    }
+    return $updateFields;
+}
+
 
 /**
  * @param $arr
@@ -332,18 +356,19 @@ function cleanUpArray($arr) {
  * validates $data as a JSON API document
  * @param $data
  * @return Response
- *
+ * @throws Exception
  */
-function is_valid_data($data) {
+function is_valid_post_data($data,$def=null) {
     if(!is_object($data))
-        return Response::make(false,400,"Input data must be an object: ".json_encode($data));
+        throw new Exception("Input data must be an object: ".json_encode($data));
     if(!property_exists($data,"data"))
-        return Response::make(false,400,"data property missing");
+        throw new Exception("data property missing");
+
 
     $entries = !is_array($data->data)?[$data->data]:$data->data;
     
     foreach($entries as $entry) {
-        $res = is_valid_entry($entry);
+        $res = is_valid_post_data_entry($entry,$def);
         if($res->code!==200)
             return $res;
     }
@@ -353,11 +378,12 @@ function is_valid_data($data) {
 
 /**
  * validates if $entry is a valid entry structure inside an JSONApi object
+ * does not valid contents against the prototype
  * @param object $entry
+ * @param object $def
  * @return Response
- *
  */
-function is_valid_entry($entry) {
+function is_valid_post_data_entry($entry,$def) {
     if(!is_object($entry))
         return Response::make(false,400,"data entry not an object");
     if(!property_exists($entry,"type"))
@@ -368,4 +394,14 @@ function is_valid_entry($entry) {
     if(!is_object($entry->attributes))
         return Response::make(false,400,"entry object attributes property must be an object");
     return Response::make(true,200,$entry);
+}
+
+/**
+ * generates a cryptographical strong random string
+ * @param int $len bytes length
+ * @return string
+ */
+function unique_id($len)
+{
+    return bin2hex(openssl_random_pseudo_bytes($len));
 }

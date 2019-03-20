@@ -309,9 +309,13 @@ class Records extends MY_RestController
         if (empty($tblName))
             return http_respond(400, '{"error":"Table name not provided"}');
 
-        $validation = is_valid_data($postData);
-        if($validation->code!==200)
-            return http_respond($validation->code,'{"error":"'.$validation->data.'"}');
+        try{
+            is_valid_post_data($postData);
+        }
+        catch (Exception $e) {
+            // TODO: log validation data, eventualy provide extra validation info....
+            HttpResp::json_out($e->getCode(),["errors"=>[["message"=>$e->getMessage()]]]);
+        }
 
         $this->load->model("data_model", "dm");
         if (!$this->dm->init($dbName))
@@ -458,9 +462,13 @@ class Records extends MY_RestController
         if (empty($tblName))
             return http_respond(400, '{"error":"Table name not provided"}');
 
-        $validation = is_valid_data($postData);
-        if($validation->code!==200)
-            return http_respond($validation->code,'{"error":"'.$validation->data.'"}');
+        try{
+            is_valid_post_data($postData);
+        }
+        catch (Exception $e) {
+            // TODO: log validation data, eventualy provide extra validation info....
+            HttpResp::json_out($e->getCode(),["errors"=>[["message"=>$e->getMessage()]]]);
+        }
 
         $this->load->model("data_model", "dm");
         if (!$this->dm->init($dbName))

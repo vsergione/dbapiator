@@ -52,6 +52,7 @@ class Autoloader
         }
 
         if (file_exists($file = $this->dir.'/'.str_replace('\\', '/', $class).'.php')) {
+            /** @noinspection PhpIncludeInspection */
             require $file;
         }
     }

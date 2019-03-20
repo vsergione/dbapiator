@@ -8,6 +8,9 @@
  * @property array $relatedRecords
  */
 class RecordSet {
+    /**
+     * @var Record[]
+     */
     public $records = [];
     public $offset = 0;
     public $total = 0;
@@ -21,7 +24,7 @@ class RecordSet {
      * @param $total
      * @param bool $dbg
      */
-    public function __construct ($records, $type, $idFld, $offset, $total,$dbg=false)
+    public function __construct ($records, $type, $idFld, $offset=0, $total=null,$dbg=false)
     {
         $this->offset = $offset;
         $this->total = $total;

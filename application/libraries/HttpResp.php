@@ -94,7 +94,9 @@ class HttpResp{
      */
     public function &allow_headers($headers)
     {
-        return $this->header("Access-Control-Allow-Headers",$headers);
+        if($headers)
+            return $this->header("Access-Control-Allow-Headers",$headers);
+        return $this;
     }
 
     /**
@@ -104,7 +106,9 @@ class HttpResp{
      */
     public function &allow_all_headers($headers)
     {
-        return $this->allow_headers($headers);
+        if($headers)
+            return $this->allow_headers($headers);
+        return $this;
     }
 
     /**
@@ -114,7 +118,9 @@ class HttpResp{
      */
     public function &allow_origin($origin)
     {
-        return $this->header("Access-Control-Allow-Origin",$origin);
+        if($origin)
+            return $this->header("Access-Control-Allow-Origin",$origin);
+        return $this;
     }
 
     /**
@@ -124,7 +130,9 @@ class HttpResp{
      */
     public function &content_type($type)
     {
-        return $this->header("Content-Type",$type);
+        if($type)
+            return $this->header("Content-Type",$type);
+        return $this;
     }
 
     /**
@@ -170,11 +178,10 @@ class HttpResp{
     /**
      * shorthand method for making a quick response
      * @param string|int $code HTTP response code
-     * @param $contentType HTTP content type
-     * @param $body HTTP response body
-     * @return bool
+     * @param string $contentType HTTP content type
+     * @param string $body HTTP response body
      */
-    static function quick($code,$contentType,$body=null)
+    static function quick($code,$contentType=null,$body=null)
     {
         $resp = HttpResp::init();
         $resp
@@ -182,7 +189,7 @@ class HttpResp{
             ->content_type($contentType)
             ->body($body)
             ->output();
-        return true;
+        exit();
     }
 
 
@@ -191,14 +198,11 @@ class HttpResp{
      * @param $contentType
      * @param null $body
      * @param null $headers
-     * @return bool
      */
     static private function ctype_out($code,$contentType,$body=null,$headers=null)
     {
-        if(is_null($headers)) {
+        if(is_null($headers))
             HttpResp::quick($code, $contentType,  $body);
-            return true;
-        }
 
         $resp = HttpResp::init();
         if(is_array($headers))
@@ -207,21 +211,74 @@ class HttpResp{
         else
             $resp->header($headers);
         $resp->content_type($contentType)->body($body)->output();
-        return true;
-    }
-
-    static function not_authorized($body=null)
-    {
-        HttpResp::init()->response_code(401)->body($body)->output();
-        return true;
+        exit();
     }
 
     /**
-     * helper method for creating a response for json cType. JSON encodes the body when not encoded already
+     * returns a 401 Not authorized and exists execution
+     * @param null $body
+     */
+    static function not_authorized($body=null)
+    {
+        HttpResp::init()->response_code(401)->body($body)->content_type("text/plain")->output();
+        exit();
+    }
+
+    /**
+     * returns a 401 Not authorized and exists the script
+     * @param string $body
+     */
+    static function not_found($body=null)
+    {
+        HttpResp::init()->response_code(404)->body($body)->output();
+        exit();
+    }
+
+    /**
+     * returns a 401 Not authorized
+     * @param string $body
+     */
+    static function bad_request($body=null)
+    {
+        HttpResp::init()->response_code(400)->body($body)->output();
+        exit();
+    }
+
+    /**
+     *
+     */
+    static function method_not_allowed()
+    {
+        HttpResp::init()->response_code(405)->body("Method not allowed 1")->output();
+        exit();
+    }
+
+    /**
+     * returns a 500 Server error
+     * @param string $body
+     */
+    static function server_error($body=null)
+    {
+        HttpResp::init()->response_code(500)->body($body)->output();
+        exit();
+    }
+
+    /**
+     * returns a 401 Not authorized
+     * @param string $body
+     */
+    static function service_unavailable($body=null)
+    {
+        HttpResp::init()->response_code(503)->body($body)->output();
+        exit();
+    }
+
+    /**
+     * helper method for creating a response for json cType. JSON encodes the body when not encoded already.
+     * Ends the script after output
      * @param string|int $code HTTP response code
      * @param string|array|object $body
      * @param array|string $headers assoc array of key->value or string containing header string
-     * @return bool
      */
     static function json_out($code,$body=null,$headers=null)
     {
@@ -229,7 +286,6 @@ class HttpResp{
             $body = json_encode($body,JSON_PRETTY_PRINT);
 
         HttpResp::ctype_out($code,"application/json",$body,$headers);
-        return true;
     }
 
     /**
@@ -241,7 +297,7 @@ class HttpResp{
      */
     static function xml_out($code,$body=null,$headers=null)
     {
-        // TODO: to implement
+        // TODO: implement XML output
         return true;
     }
 
@@ -249,31 +305,34 @@ class HttpResp{
      * shorthand method for generating & sending a test response
      * @param string|int $code HTTP response code
      * @param string $body
-     * @return bool
      */
     static function text_out($code,$body=null)
     {
         HttpResp::quick($code,"text/plain",$body);
-        return true;
     }
 
     /**
      * shorthand method for generating & sending a html response
      * @param string|int $code HTTP response code
      * @param string $body
-     * @return bool
      */
     static function html_out($code,$body=null)
     {
         HttpResp::quick($code,"text/html",$body);
-        return true;
+    }
+
+    /**
+     * @param $code
+     */
+    static function no_content($code)
+    {
+        HttpResp::quick($code);
     }
 
     /**
      * shorthand method for performing a redirect
      * @param string $location
      * @param string|int $code HTTP response code; defaults to 301 Moved permanently
-     * @return bool
      */
     static function redirect($location,$code=301)
     {
@@ -281,7 +340,7 @@ class HttpResp{
             ->response_code($code)
             ->header("Location",$location)
             ->output();
-        return true;
+        exit();
     }
 }
 

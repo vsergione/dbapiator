@@ -1,7 +1,10 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
-$config['base_url'] = 'https://develhost/proteus/';
 
+$config["allApisDir"] = "/var/www/domains/apiator/apiator_data/___apis";
+
+
+$config['base_url'] = 'https://dbapi.apiator/';
 
 $config['index_page'] = '';
 $config['uri_protocol']	= 'REQUEST_URI'; // [REQUEST_URI | QUERY_STRING | PATH_INFO]
@@ -17,7 +20,7 @@ $config['enable_query_strings'] = FALSE;
 $config['controller_trigger'] = 'c';
 $config['function_trigger'] = 'm';
 $config['directory_trigger'] = 'd';
-$config['log_threshold'] = 0; // 0-4
+$config['log_threshold'] = 4; // 0-4
 $config['log_path'] = ''; // defaults to application/logs
 $config['log_file_extension'] = '.txt';
 $config['log_file_permissions'] = 0644;
