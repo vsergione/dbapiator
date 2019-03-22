@@ -369,7 +369,6 @@ class Dbapi extends CI_Controller
         // check if table exists
         if (!$this->apiDm->is_valid_resource($tableName)) {
             HttpResp::not_found();
-            exit();
         }
 
         // POST data validation
