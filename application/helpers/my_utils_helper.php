@@ -26,7 +26,7 @@ function http_respond($httpCode=200,$payload=null,$location=null,$encoding="appl
         header("Content-type: $encoding");
 
     echo $payload;
-    return null;
+    die();
 }
 
 
@@ -126,9 +126,9 @@ function render_select_query($from, $joins, $whereArr=null, $orderByArr=null, $o
 
     $sqlGroup = ($groupBy)?"GROUP BY $groupBy":"";
 
-    $countSql = sprintf("SELECT count(*) as cnt FROM %s %s WHERE %s %s",
+    $countSql = sprintf("SELECT count(*) as cnt FROM %s WHERE %s %s",
         $from["table"],
-        implode(" ", $joinArr),
+        //implode(" ", $joinArr),
         $sqlWhere,
         $sqlGroup);
     $mainSql = sprintf("SELECT %s FROM %s %s WHERE %s %s ORDER BY %s %s",
@@ -373,7 +373,7 @@ function is_valid_post_data($data,$def=null) {
             return $res;
     }
     
-    return Response::make(true,200,$data);
+    return $data;
 }
 
 /**

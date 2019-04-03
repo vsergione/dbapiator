@@ -211,14 +211,15 @@ class Datamodel {
 
     /**
      * @param $tableName
-     * @return Response
+     * @return array
      */
     function get_key_flds($tableName) {
-        $keys = array();
+        $keys = [];
         foreach($this->dataModel[$tableName]["fields"] as $fldName=> $fldSpec)
             if($fldSpec->iskey)
                 $keys[] = $fldName;
-        return Response::make(true,200,$keys);
+
+        return $keys;
     }
 
     /**
@@ -228,12 +229,12 @@ class Datamodel {
      */
     function get_fk_relation($resName, $field) {
         if(!$this->is_valid_field($resName,$field))
-            return Response::make(false,500,"Invalid field");
+            return null;
 
         if(!isset($this->dataModel[$resName]["fields"][$field]["foreignKey"]))
-            return Response::make(false,404);
+            return null;
 
-        return Response::make(true,null,$this->dataModel[$resName]["fields"][$field]["foreignKey"]);
+        return $this->dataModel[$resName]["fields"][$field]["foreignKey"];
     }
 
     /**
@@ -242,7 +243,8 @@ class Datamodel {
      * @param string $tableName table name
      * @param string $fieldName field name
      * @param string $value value to be validated
-     * @return Response
+     * @return mixed
+     * @throws \Exception
      */
     function is_valid_value($tableName,$fieldName,$value) {
         $mysqlTypes = [
@@ -264,7 +266,7 @@ class Datamodel {
         // $boolValid = array("1"=>true,"0"=>false,1=>true,0=>false,true=>true,false=>false,"true"=>true,"false"=>false);
 
         if(!$this->is_valid_field($tableName,$fieldName))
-            return Response::make(false,400,"Invalid field $fieldName");
+            throw new \Exception("Invalid field $fieldName",400);
 
         $fields = $this->get_fields($tableName);
 
@@ -279,16 +281,16 @@ class Datamodel {
         // $length = property_exists($fields->$fieldName->type,"length") ? $fields->$fieldName->type->length : null;
 
         if(!$fields[$fieldName]["required"] && is_null($value))
-            return Response::make(true, 200, null);
+            return null;
 
         //print_r($value);
         if(is_object($value)) {
             if (array_key_exists("foreignKey", $fields[$fieldName])
                 && $fields[$fieldName]["foreignKey"]["table"] == $value->data->type) {
-                return Response::make(true, 200, $value);
+                return $value;
             }
             else
-                return Response::make(false, 400, "Invalid object as field value");
+                throw new \Exception("Invalid object as field value",400);
 
         }
 
@@ -296,122 +298,123 @@ class Datamodel {
             // numeric types
             case "tinyint":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "smallint":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "mediumint":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "int":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "bigint":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "decimal":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "float":
                 if(is_numeric($value))
                     $value *= 1;
                 if(in_array(gettype($value), ["float","double","integer"]))
-                    return Response::make(true,200,$value);
+                    return $value;
                 break;
             case "double":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "real":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "bit":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value*1;
                 }
                 break;
             case "boolean":
-                if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                if(is_bool($value)) {
+                    return $value;
                 }
                 break;
             case "serial":
                 if(is_numeric($value)) {
-                    return Response::make(true, 200, $value);
+                    return $value;
                 }
                 break;
             // DATE & TIME
             case "datetime":
                 if(preg_match("/^\d{4}\-\d{2}\-\d{2} \d{2}\:\d{2}\:\d{2}$/",$value))
-                    return Response::make(true,200,$value);
+                    return $value;
                 break;
             case "date":
                 if(preg_match("/^\d{4}\-\d{2}\-\d{2}$/",$value))
-                    return Response::make(true,200,$value);
+                    return $value;
                 break;
             case "timestamp":
                 if(preg_match("/^\d{4}\-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/i",$value))
-                    return Response::make(true,200,$value);
+                    return $value;
                 break;
             case "time":
                 if(preg_match("/^\-?\d{2,3}:\d{2}:\d{2}$/i",$value))
-                    return Response::make(true,200,$value);
+                    return $value;
                 break;
             case "year":
                 if(is_numeric($value) && ($value*1)<9999)
-                    return Response::make(true,200,$value);
+                    return $value;
                 break;
             // TEXT
             case "char":
-                return Response::make(true,200,$value."");
+                return $value;
             case "varchar":
-                return Response::make(true,200,$value."");
+                return $value;
             case "tinytext":
-                return Response::make(true,200,$value."");
+                return $value;
             case "text":
-                return Response::make(true,200,$value."");
+                return $value;
             case "mediumtext":
-                return Response::make(true,200,$value."");
+                return $value;
             case "longtext":
-                return Response::make(true,200,$value."");
+                return $value;
             case "binary":
-                return Response::make(true,200,$value."");
+                return $value;
             case "varbinary":
-                return Response::make(true,200,$value."");
+                return $value;
             case "tinyblob":
-                return Response::make(true,200,$value."");
+                return $value;
             case "mediumblob":
-                return Response::make(true,200,$value."");
+                return $value;
             case "blob":
-                return Response::make(true,200,$value."");
+                return $value;
             case "longblob":
-                return Response::make(true,200,$value."");
+                return $value;
             // SET
             case "set":
                 if(in_array($value,$fields[$fieldName]["type"]["vals"]))
-                    return Response::make(true,200,$value);
+                    return $value;
                 break;
             case "enum":
                 if(in_array($value,$fields[$fieldName]["type"]["vals"]))
-                    return Response::make(true,200,$value);
+                    return $value;
                 break;
             default:
-                return Response::make(false,500,"Invalid type in configuration file for $fieldName");
+                throw new \Exception("Invalid type in configuration file for $fieldName",500);
+
         }
 
         // check if field is required but value is null and set error message accordingly
@@ -422,7 +425,7 @@ class Datamodel {
             $msg = "Invalid type of value for field $fieldName";
         }
 
-        return Response::make(false, 400, $msg);
+        throw new \Exception($msg,400);
     }
 
     /**
@@ -495,40 +498,43 @@ class Datamodel {
      * @param $resName
      * @param $attrs
      * @param string $operation
-     * @return Response
+     * @return mixed
      * TODO: review this method
+     * @throws \Exception
      */
     function validate_object_attributes($resName, $attrs, $operation="ins") {
         if(!$this->is_valid_resource($resName))
-            return Response::make(false,404,"table '$resName' not found");
+            throw new \Exception("table '$resName' not found",400);
+
         $attrFlds = array_keys(get_object_vars($attrs));
 
         foreach($this->dataModel[$resName]["fields"] as $fldName=> $fldSpec) {
             if($fldSpec["required"] && is_null($fldSpec["default"]) && !in_array($fldName,$attrFlds) && $operation=="ins")
-                return Response::make(false,400,"required attribute '$fldName' not provided");
+                throw new \Exception("Required attribute '$fldName' not provided",400);
 
             // field not allowed to insert
             if(in_array($fldName,$attrFlds) && $fldSpec["insert"]==false && $operation=="ins")
-                return Response::make(false,400,"attribute '$fldName' not allowed to be inserted");
+                throw new \Exception("Attribute '$fldName' not allowed to be inserted",400);
 
             // field not allowed to update
             if(in_array($fldName,$attrFlds) && $fldSpec["update"]==false && $operation=="upd")
-                return Response::make(false,400,"attribute '$fldName' not allowed to be updated");
+                throw new \Exception("Attribute '$fldName' not allowed to be updated",400);
+
         }
 
         foreach($attrs as $attrName=>$attrVal) {
-            $response = $this->is_valid_value($resName,$attrName,$attrVal);
+            $attrVal = $this->is_valid_value($resName,$attrName,$attrVal);
 
             /**
-             * TODO: instead of just checking if value is an object as exception when value type validation fails implement a proper mechanism inside the is_valid_value method
+             * TODO: instead of just checking if value is an object as exception when value type validation fails
+             *       implement a proper mechanism inside the is_valid_value method
              */
-            if(!$response->success && !is_object($attrVal))
-                return $response;
+
 
             if(!is_object($attrVal))
-                $attrs->$attrName = $response->data;
+                $attrs->$attrName = $attrVal;
         }
-        return Response::make(true,200,$attrs);
+        return $attrs;
     }
 
 

@@ -49,11 +49,10 @@ class Dbapi extends CI_Controller
 
         $this->load->helper("my_utils");
         header("Access-Control-Allow-Origin: *");
-
     }
 
     /**
-     * reads API configuration file, connectes to database and initializes the API DataModel (structure)
+     * reads API configuration file, connects to the database and initializes the API DataModel (structure)
      * initializes internal objects:
      * - apiDm: DataModel
      * - apiDb: database connection
@@ -62,43 +61,38 @@ class Dbapi extends CI_Controller
     private function _init($apiId)
     {
         $apiConfigDir = $this->apisDir."/$apiId";
-        //echo $apiConfigDir;
+
         if(!is_dir($apiConfigDir)) {
             // API Not found
             // TODO: log to admin log that API not found
             HttpResp::not_found("API $apiId not found");
-            die();
         }
-
 
         $structure = require($apiConfigDir."/structure.php");
         if(!isset($structure)) {
             // Invalid API config
             // TODO: log error: wrong api config
             HttpResp::server_error("Invalid API configuration");
-            die();
         }
 
         $connection = require($apiConfigDir."/connection.php");
         if(!isset($connection)) {
-            HttpResp::server_error("Invalid API configuration");
-            die();
+            HttpResp::server_error("Invalid database config");
         }
 
+        // todo: depending on the API client, load the appropriate permissions file
         $permissions = require($apiConfigDir."/profiles/default.php");
         if(!isset($permissions)) {
-            HttpResp::server_error("Invalid API configuration");
-            die();
+            HttpResp::server_error("Invalid API permissions");
         }
 
+        //
         $settings = require($apiConfigDir."/settings.php");
         if(!isset($settings)) {
-            HttpResp::server_error("Invalid API configuration");
-            die();
+            HttpResp::server_error("Invalid API settings");
         }
 
         $apiCfg = array_merge_recursive($permissions,$structure);
-
 
         // connects to DB server
         $dbConf = array(
@@ -122,23 +116,21 @@ class Dbapi extends CI_Controller
             'failover' => array(),
             'save_queries' => TRUE
         );
+
         /**
          * @var CI_DB_pdo_driver db
          */
         $db = $this->load->database($dbConf,TRUE);
         if(!$db) {
-            //
             // TODO log DB connection failed
             HttpResp::service_unavailable("Failed to connect to database");
-            die();
         }
 
         // initializes DM with structure fetched from $apiCfg
         $dm = Apiator\DBApi\Datamodel::init($apiCfg);
         if(!$dm) {
             // TODO log wrong config file
-            HttpResp::server_error("Invalid API config");
-            die();
+            HttpResp::server_error("Invalid API datamodel");
         }
 
         $this->apiDb = $db;
@@ -150,19 +142,25 @@ class Dbapi extends CI_Controller
         if(!$this->recs) {
             // TODO log unable to initialize records navigator class
             HttpResp::server_error("Invalid API config");
-            die();
         }
     }
 
-
-
-
+    /**
+     * @param string $apiName
+     * @param string $tblName
+     * @param string $recId
+     */
     function update($apiName, $tblName, $recId)
     {
         echo "updateRecord";
         print_r(func_get_args());
     }
 
+    /**
+     * @param string $apiName
+     * @param string $tblName
+     * @param string $recId
+     */
     function delete($apiName, $tblName, $recId=null)
     {
         if(!$recId)
@@ -175,9 +173,8 @@ class Dbapi extends CI_Controller
 
 
     /**
+     * retrieves data from the database according with the provided parameters and outputs it to the client as JSON
      * processes a GET requests for /api/$apiId/$resName
-     * - initializez API Config & DB Connection
-     * - depending on the parameteres redirects the
      * @param string $apiId
      * @param string $resName
      * @return null
@@ -191,28 +188,24 @@ class Dbapi extends CI_Controller
         if (!$this->apiDm->is_valid_resource($resName)) {
             // TODO log resource $resName not found
             HttpResp::not_found("Resource $resName not found");
-            exit();
         }
 
         // fetch records
-        $response = $this->_get($resName);
-        if (!$response->success)
-            return http_respond($response->code, $response->data);
-        $recordSet = $response->data;
+        $recordSet = $this->_get($resName);
 
         $json = new JSONApiResponse($recordSet,
             new JSONApiMeta($recordSet->offset, $recordSet->total),
             new JSONApiLinks(current_url())
         );
         $cleaned = cleanUpArray((array)$json);
-        http_respond(200, json_encode($cleaned, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        HttpResp::json_out(200, $cleaned);
     }
 
 
     /**
      * processes a GET requests for /api/$apiId/$resName/$recId
-     * - initializez API Config & DB Connection
-     * - depending on the parameteres redirects the
+     * - initializes API Config & DB Connection
+     * - depending on the parameters redirects the
      * @param $apiId
      * @param $resName
      * @param $recId
@@ -240,10 +233,7 @@ class Dbapi extends CI_Controller
             $_GET["filter"] = "$keyFld=$recId";
 
         // fetch data from DB
-        $response = $this->_get($resName);
-        if(!$response->success)
-            return http_respond($response->code,$response->data);
-        $recordSet = $response->data;
+        $recordSet = $this->_get($resName);
 
         if($recordSet->total==0) {
             HttpResp::not_found();
@@ -270,7 +260,7 @@ class Dbapi extends CI_Controller
 
     /**
      * @param string $tblName
-     * @return Response
+     * @return RecordSet
      */
     private function _get($tblName)
     {
@@ -282,6 +272,7 @@ class Dbapi extends CI_Controller
         $pageSize = get_limit($this->input,$this->myConfig["default_result_set_limit"]);
         $sortBy = get_sort($this->input,$tblName);
         $relations = get_relations($this->input);
+        /*
         $options = [
             "includes"=>get_include($this->input),
             "fields"=>get_fields($this->input,$tblName),
@@ -291,6 +282,7 @@ class Dbapi extends CI_Controller
             "sort"=>get_sort($this->input,$tblName),
             "relations"=>get_relations($this->input)
         ];
+        */
         //print_r($options);
 
         $records = $this->recs->get_records($tblName,
@@ -309,7 +301,6 @@ class Dbapi extends CI_Controller
          * @var Record $rec
          */
         foreach ($records->records as $rec) {
-
             foreach ($relations as $relationName) {
                 if(!isset($relationsConfig[$relationName])) {
                     $relationsConfig[$relationName] = $this->apiDm->get_relation_config($tblName, $relationName);
@@ -350,8 +341,8 @@ class Dbapi extends CI_Controller
                 }
             }
         }
-        $stop = microtime();
-        return Response::make(true, 200, $records);
+        //$stop = microtime();
+        return $records;
 
     }
 
@@ -382,44 +373,38 @@ class Dbapi extends CI_Controller
         }
 
 
-        // configure onDuplicate parameter
+        // configure onDuplicate behaviour
         $onDuplicate = $this->input->get("onduplicate");
         if(!in_array($onDuplicate,["update","ignore","error"]))
             $onDuplicate = "error";
-
-
 
         // configure fields to be updated when onduplicate is set to "update"
         $updateFields = [];
         if($onDuplicate=="update") {
             $updateFields = get_fields_to_update($this->input,$tableName);
-
+            // if no update fields provided exit with bad request 400
+            if(!count($updateFields))
+                HttpResp::bad_request("No fields to be updated have been specified");
         }
 
-        // if flag is set update when duplicate and no update fields provided
-        // exit with bad request 400
-        if($onDuplicate=="update" && !count($updateFields)) {
-            HttpResp::bad_request("No fields to be updated have been specified");
-            die();
-        }
 
-        // configure if inerts should be enclosed in a transaction
-        $_get = $this->input->get();
-        $transaction = isset($_get["transaction"]);
-
-
+        // configure if inserts should be enclosed in a transaction
+        $transaction = $this->input->get("transaction") && true;
 
         // call internal method to update
-        $response = $this->_insert($tableName,$postData,true,$transaction,$onDuplicate,$updateFields);
-        if(!$response->success)
-            return http_respond($response->code,'{"error":"'.$response->data.'"}');
+        try {
+            $data = $this->_insert($tableName, $postData, true, $transaction, $onDuplicate, $updateFields);
+        }
+        catch (Exception $e) {
+            HttpResp::json_out($e->getCode(),["errors"=>[["message"=>$e->getMessage()]]]);
+        }
 
         $meta = null;
-        if(get_class($response->data)=="RecordSet")
-            $meta =  new JSONApiMeta($response->data->offset,$response->data->total);
+        if(get_class($data)=="RecordSet")
+            $meta =  new JSONApiMeta($data->offset,$data->total);
 
-        $response = new JSONApiResponse($response->data,$meta);
-        HttpResp::json_out(200, json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        $response = new JSONApiResponse($data,$meta);
+        HttpResp::json_out(200, $response->toJSON());
     }
 
     /**
@@ -437,11 +422,13 @@ class Dbapi extends CI_Controller
             exit();
         }
 
-        $res = $this->recs->delete($tableName,$recId);
-        $resp = HttpResp::init()->response_code($res->code);
-        if($resp->data)
-            $resp->body($resp->data);
-        $resp->output();
+        try {
+            $this->recs->delete($tableName, $recId);
+            HttpResp::no_content(204);
+        }
+        catch (Exception $e) {
+            HttpResp::json_out($e->getCode(),["errors"=>[["message"=>$e->getMessage()]]]);
+        }
     }
 
     /**
@@ -470,7 +457,8 @@ class Dbapi extends CI_Controller
      * @param $transaction
      * @param $onDuplicate
      * @param $updateFields
-     * @return Response
+     * @return RecordSet
+     * @throws Exception
      */
     private function _insert($tblName, $data, $recursive, $transaction, $onDuplicate, $updateFields) {
         // initializes an empty RecordSet
@@ -486,28 +474,35 @@ class Dbapi extends CI_Controller
         // prepare data
         $entries = is_array($data->data)?$data->data:[$data->data];
 
-        // iterate through data and insert records
+        // iterate through data and insert records one by one
+        // - no bulk insert supported
         foreach($entries as $entry) {
-
-            $res = $this->recs->insert($entry->type,$entry->attributes,$recursive,$onDuplicate,$updateFields);
-
-            if($res->success) {
-                $_GET["filter"] = "id=$res->data";
-                $response = $this->_get($tblName);
-                if(count($response->data->records))
-                    $recordSet->add_record($tblName,$response->data->records[0],$this->apiDm->get_key_fld($tblName));
+            try {
+                // todo: what happens when the records are not uniquely identifyable?? think about adding an extra behaviuor
+                $keyFldVal = $this->recs->insert($entry->type, $entry->attributes, $recursive, $onDuplicate, $updateFields);
+                $idFld = $this->apiDm->get_key_fld($entry->type);
+                $_GET["filter"] = "$idFld=$keyFldVal";
+                $records = $this->_get($tblName);
+                if(count($records->records)) {
+                    $recordSet->add_record($tblName,$records->records[0],$this->apiDm->get_key_fld($tblName));
+                }
             }
-            elseif($transaction){
-                $this->apiDb->trans_rollback();
-                return $res;
+            catch (Exception $e)
+            {
+                if($transaction){
+                    $this->apiDb->trans_rollback();
+                }
+                throw $e;
             }
+
         }
+
 
         $this->apiDb->trans_commit();
         if($singleInsert)
-            return Response::make(true,200,$recordSet->records[0]);
+            return $recordSet->records[0];
 
-        return Response::make(true,200,$recordSet);
+        return $recordSet;
     }
 
 

@@ -150,10 +150,14 @@ class JSONApiResponse {
             unset($this->data);
         // ToDo: add remove data when data is null & meta not null; need to implement data null
     }
-    function toJSON() {
-        $this->cleanUp();
 
-        return json_encode($this, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    /**
+     * @param bool $pretty
+     * @return false|string
+     */
+    function toJSON($pretty=true) {
+        $this->cleanUp();
+        return json_encode($this, $pretty ? (JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : 0);
     }
 
     /**

@@ -21,10 +21,15 @@ class Records {
     private $dm;
 
     /**
-     * @var \CI_DB_pdo_driver
+     * @var \CI_DB_query_builder
      */
     private $dbdrv;
 
+    /**
+     * Records constructor.
+     * @param \CI_DB_query_builder $dbDriver
+     * @param Datamodel $dataModel
+     */
     function __construct($dbDriver,$dataModel) {
         $this->dm = $dataModel;
         $this->dbdrv = $dbDriver;
@@ -147,14 +152,12 @@ class Records {
         ];
 
 
-        // generate join & part of the fields Arr
+        // generate join & partially the fields Arr
         $joinArr = [];
         foreach ($includes as $include) {
-            $fk = $this->dm->get_fk_relation($resName,$include);
-
-            if($fk->success) {
-                $rel = $fk->data;
-
+            // get relation
+            $rel = $this->dm->get_fk_relation($resName,$include);
+            if($rel) {
                 $alias = sprintf("%s_%s",$include,$rel["table"]);
                 $joinArr[$include] = [
                     "table" => $rel["table"],
@@ -163,39 +166,49 @@ class Records {
                     "right"=>$resName.".".$include,
                     "fields"=> [],
                     "order"=> [],
-                    "where"=> []
+                    "where"=> [],
+                    "fkFLd"=>$rel["field"]
                 ];
 
+                // add selected fields of included resources for the SELECT part
                 if(isset($fields[$include])) {
-                    foreach ($fields[$include] as $fld)
-                        if($this->dm->is_valid_field($rel["table"],$fld))
-                            array_push($joinArr[$include]["fields"],$fld);
+                    foreach ($fields[$include] as $fld) {
+                        if ($this->dm->is_valid_field($rel["table"], $fld)) {
+                            array_push($joinArr[$include]["fields"], $fld);
+                        }
+                    }
                 }
 
+                // when no fields specified, make sure to add *
                 if(empty($joinArr[$include]["fields"]))
                     array_push($joinArr[$include]["fields"],"*");
-                elseif (!in_array("id",$joinArr[$include]["fields"]))
-                    array_push($joinArr[$include]["fields"],"id");
+                // if there are fields specified make sure that the fkField is included
+                elseif (!in_array($joinArr[$include]["fkFLd"],$joinArr[$include]["fields"]))
+                    array_push($joinArr[$include]["fields"],$joinArr[$include]["fkFLd"]);
             }
+
         }
 
-        // take care  of the from part
+        // take care  of the FROM part
         if(isset($fields[$resName])) {
             foreach ($fields[$resName] as $fld)
                 if ($this->dm->is_valid_field($resName, $fld))
                     array_push($from["fields"], $fld);
         }
 
-        if(empty($from["fields"]))
+        if(empty($from["fields"])) {
             array_push($from["fields"], "*");
+        }
         else {
-            array_push($from["fields"], "id");
+            $primaryKey = $this->dm->get_key_fld($resName);
+            if($primaryKey && !in_array($primaryKey,$from["fields"]))
+                array_push($from["fields"],$primaryKey );
             $from["fields"] = array_merge($from["fields"],array_keys($joinArr));
             $from["fields"] = array_unique($from["fields"]);
         }
 
 
-        // ORDER BY array generation
+        // generate ORDER BY array
         $orderByArr = [];
         foreach ($order as $item) {
             if($item->alias==$resName && $this->dm->is_valid_field($resName,$item->fld))
@@ -220,17 +233,19 @@ class Records {
             }
         }
 
-
         //list($totalRecs,$res) = $this->select_query($from,$joinArr,$whereArr,$orderByArr,$offset,$limit);
         list($countSql,$mainSql) = render_select_query($from,$joinArr,$whereArr,$orderByArr,$offset,$limit);
 
         $res = $this->dbdrv->query($countSql);
+
         //echo $this->dbdrv->last_query();
         $totalRecs = $res->row()->cnt;
         if($totalRecs===0)
             $mainSql = "SELECT 1 from DUAL where false";
+
         $res = $this->dbdrv->query($mainSql);
         //echo $this->dbdrv->last_query();
+
         $recordSet = new \RecordSet([],$resName,$this->dm->get_idfld($resName), $offset,$totalRecs);
 
         if($from["fields"][0]=="*") {
@@ -244,27 +259,32 @@ class Records {
         }
 
         $resArray = $res->result_array_num();
+        //print_r($joinArr);
 
         foreach ($resArray as $row) {
-            $tmp = [];
+            // separate the main table fields from the fields of the joined  tables
+            $mainTableFlds = [];
             for($i=0;$i<count($from["fields"]);$i++) {
-                $tmp[$from["fields"][$i]] = $row[$i];
+                $mainTableFlds[$from["fields"][$i]] = $row[$i];
             }
-            $newRec = $recordSet->add_record($resName,$tmp,$this->dm->get_idfld($resName));
+            $newRec = $recordSet->add_record($resName,$mainTableFlds,$this->dm->get_idfld($resName));
+
             $recOffset = count($from["fields"]) ;
             foreach ($joinArr as $fld=>$join) {
-                $tmp = [];
+                //print_r($join);
+                // extract fields of the joined array
+                $joinTableFlds = [];
                 for($i=0;$i<count($join["fields"]);$i++) {
-                    $tmp[$join["fields"][$i]] = $row[$i+$recOffset];
+                    $joinTableFlds[$join["fields"][$i]] = $row[$i+$recOffset];
                 }
 
-                if(!empty($tmp["id"])) {
-                    $relRecId = $tmp["id"];
+                if(!empty($joinTableFlds[$join["fkFLd"]])) {
+                    $relRecId = $joinTableFlds[$join["fkFLd"]];
                     $relRecType = $join["table"];
-                    unset($tmp["id"]);
-                    $newRec->attributes->$fld = new \Record($relRecType,$relRecId,$tmp);
+                    unset($joinTableFlds[$join["fkFLd"]]);
+                    $newRec->attributes->$fld = new \Record($relRecType,$relRecId,$joinTableFlds);
                 }
-                //$RecordSet->add_related_record($join["table"],$tmp);
+                //$recordSet->add_related_record($join["table"],$tmp);
                 $recOffset += count($join["fields"]);
             }
             reset($joinArr);
@@ -279,47 +299,39 @@ class Records {
      * TODO: clarify best approach about what to return after inserting OK....
      *
      *
-     * @param string $table
-     * @param object $data
-     * @param $recursive
-     * @param string $onDuplicate
-     * @param String[] $updateFields
+     * @param string $table name of table where data will be inserted
+     * @param object $data data to be inserted
+     * @param bool $recursive allow recursive insert
+     * @param string $onDuplicate behaviour flags
+     * @param String[] $toUpdateFields
      * @return \Response
+     * @throws \Exception
      */
-    function insert($table, $data, $recursive, $onDuplicate, $updateFields) {
+    function insert($table, $data, $recursive, $onDuplicate, $toUpdateFields) {
         // validate attributes
-        $resp = $this->dm->validate_object_attributes($table,$data,"ins");
-
-        if(!$resp->success) {
-            return $resp;
-        }
-
-        $attributes = $resp->data;
+        $attributes = $this->dm->validate_object_attributes($table,$data,"ins");
 
         $idFld = $this->dm->get_key_fld($table);
 
-
         // call recursive create for embedded records
-        foreach($attributes as $name=>$value) {
+        foreach($attributes as $fldName=>$value) {
             if(is_object($value) && $recursive) {
                 // insert first embeded objects
-
                 try{
                     is_valid_post_data($value);
                 }
-                catch (Exception $e) {
-                    return $resp;
+                catch (\Exception $e) {
+                    throw $e;
                 }
 
-
                 $value = $value->data;
-
-                $resp = $this->insert($value->type, $value->attributes, $recursive, $onDuplicate, $updateFields);
-
-                if (!$resp->success)
-                    return $resp;
-                // print_r($resp->success);
-                $attributes->$name = $resp->data;
+                try {
+                    $recId = $this->insert($value->type, $value->attributes, $recursive, $onDuplicate, $toUpdateFields);
+                    $attributes->$fldName = $recId;
+                }
+                catch (\Exception $e)  {
+                    throw $e;
+                }
             }
         }
 
@@ -330,8 +342,8 @@ class Records {
         // configure behaviour to update fields when
         if($onDuplicate=="update") {
             $updStr = [];
-            if (!empty($updateFields[$table])) {
-                foreach ($updateFields[$table] as $fld) {
+            if (!empty($toUpdateFields[$table])) {
+                foreach ($toUpdateFields[$table] as $fld) {
                     if ($this->dm->is_field_updateable($table, $fld) && isset($attributes->$fld)) {
                         $updStr[] = "$fld=VALUES($fld)";
                     }
@@ -340,7 +352,7 @@ class Records {
             if(count($updStr))
                 $insSql .= " ON DUPLICATE KEY UPDATE " . implode(",", $updStr);
             else
-                return \Response::make(false, 400, "Invalid fields to be updated");
+                throw new \Exception("Invalid fields to be updated",400);
         }
 
         if($onDuplicate=="ignore") {
@@ -350,12 +362,12 @@ class Records {
 
 
         if(!$this->dbdrv->query($insSql))
-            return \Response::make(false, 500, $this->dbdrv->error()["message"]);
+            throw new \Exception($this->dbdrv->error()["message"],500);
 
 
         $insId = $this->dbdrv->insert_id();
         if($insId)
-            return \Response::make(true,201,$insId);
+            return $insId;
 
         $this->dbdrv->where((array) $attributes);
         $selSql = $this->dbdrv->get_compiled_select($table);
@@ -367,18 +379,17 @@ class Records {
         if($q->num_rows()>1) {
             print_r($q->result_array());
             log_message("debug","More then one records returned on Insert new record: $insSql / $selSql");
-            return \Response::make(false,500,"More then one records returned");
+            throw new \Exception("More then one records returned",500);
         }
 
         if($q->num_rows()==0) {
-            return \Response::make(false, 500, "Server error. Contact administrator.");
+            throw new \Exception("Server error. Contact administrator.",500);
         }
 
         $newRecId = $q->row()->$idFld;
-        return \Response::make(true,201,$newRecId);
+        return $newRecId;
 
     }
-
 
 
     /**
@@ -387,6 +398,7 @@ class Records {
      * @param $id
      * @param $attributes
      * @return \Response
+     * @throws \Exception
      */
     function update($table, $id, $attributes) {
         $validation = $this->dm->validate_object_attributes($table,$attributes,"upd");
@@ -396,10 +408,6 @@ class Records {
 
         // get key flds of table
         $keyFlds = $this->dm->get_key_flds($table);
-        if($keyFlds->success)
-            $keyFlds = $keyFlds->data;
-        else
-            return $keyFlds;
 
         // validate uniq recs
         $whereArr = array();
@@ -414,14 +422,14 @@ class Records {
 
             $q = $this->dbdrv->query($sql);
             if($q->num_rows()) {
-                return \Response::make(false,409,"Duplicate key fields");
+                throw new \Exception("Duplicate key fields",409);
             }
         }
 
 
-        $this->dbdrv->where("id",$id);
+        $this->dbdrv->where($this->dm->get_key_fld($table),$id);
         $this->dbdrv->update($table,$attributes);
-        return $this->dbdrv->affected_rows()>0?\Response::make(true,200):\Response::make(true,204);
+        return $this->dbdrv->affected_rows();
     }
 
 
@@ -431,23 +439,24 @@ class Records {
      * @param string $tableName
      * @param string $recId
      *
-     * @return \Response
+     * @return bool
+     * @throws \Exception
      */
     function delete($tableName, $recId) {
         /**
          * TODO same check should be used in OPTIONS response
          */
         if(!$this->dm->delete_allowed($tableName))
-            return \Response::make(false,400,"Delete not allowed on table $tableName");
+            throw new \Exception("Delete not allowed on table $tableName",400);
 
         $idFld = $this->dm->get_key_fld($tableName);
 
         $this->dbdrv->where("$idFld in ('$recId')");
         $this->dbdrv->delete($tableName);
         if($this->dbdrv->affected_rows()) {
-            return \Response::make(true,204,null);
+            return true;
         }
-        return \Response::make(false,404,"Not found");
+        throw new \Exception("Not found",404);
     }
 
     /**
@@ -594,7 +603,7 @@ class Records {
         switch($this->dm->get_rel_type($srcTbl,$relation)) {
             case "1:1":
                 if(is_object($data))
-                    if(property_exists($data,"type") && property_exists($data,$id))
+                    if(property_exists($data,"type") && property_exists($data,"id"))
                         if($data->type==$tgtTbl)
                             $deleteWhere = "{$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$data->id'";
                         else
