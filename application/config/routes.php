@@ -71,6 +71,7 @@ $route["^api/([\w\-\_]+)/([\w\-\_]+)"]["put"] = "$controller/update/$1/$2";
 
 // APIID/RESOURCE/ID
 $route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)"]["get"] = "$controller/fetch_record_by_id/$1/$2/$3";
+$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)/ref/([\w\-\_]+)"]["get"] = "$controller/fetch_fk_record/$1/$2/$3/$4";
 $route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)"]["delete"] = "$controller/single_delete/$1/$2/$3";
 $route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)"]["put"] = "$controller/update/$1/$2/$3";
 $route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)"]["post"] = "$controller/create/$1/$2/$3";

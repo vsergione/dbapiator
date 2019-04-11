@@ -355,15 +355,15 @@ function cleanUpArray($arr) {
 /**
  * validates $data as a JSON API document
  * @param $data
+ * @param null $def
  * @return Response
  * @throws Exception
  */
 function is_valid_post_data($data,$def=null) {
     if(!is_object($data))
-        throw new Exception("Input data must be an object: ".json_encode($data),400);
+        throw new Exception("Input data must be object or array",400);
     if(!property_exists($data,"data"))
         throw new Exception("data property missing",400);
-
 
     $entries = !is_array($data->data)?[$data->data]:$data->data;
     

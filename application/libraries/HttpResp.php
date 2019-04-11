@@ -283,9 +283,27 @@ class HttpResp{
     static function json_out($code,$body=null,$headers=null)
     {
         if(is_array($body) || is_object($body))
-            $body = json_encode($body,JSON_PRETTY_PRINT);
+            $body = json_encode($body,JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
         HttpResp::ctype_out($code,"application/json",$body,$headers);
+    }
+
+    static function error_out_json($message,$code)
+    {
+        HttpResp::json_out($code,[
+            "errors"=>[
+                ["message"=>$message]
+            ]
+        ]);
+    }
+
+    /**
+     * helper to output an exception as a JSONAPI error
+     * @param Exception $e
+     */
+    static function exception_out($e)
+    {
+        HttpResp::json_out($e->getCode(),["errors"=>[["message"=>$e->getMessage()]]]);
     }
 
     /**

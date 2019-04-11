@@ -4,9 +4,16 @@ namespace Apiator\DBApi;
 
 
 //require_once(__DIR__."/../../../libraries/Response.php");
+
+
 require_once(__DIR__."/../../../libraries/Errors.php");
 require_once(__DIR__.'/../../../libraries/RecordSet.php');
 
+$req = require_once (APPPATH."/third_party/JSONApi/Autoloader.php");
+use JSONApi\Autoloader;
+Autoloader::register();
+
+use JSONApi\Document;
 
 //require_once(__DIR__."/../../../libraries/HttpResp.php");
 
@@ -125,7 +132,331 @@ class Records {
     }
 
 
+    /**
+     * @param $resName
+     * @param $recId
+     * @param $fkName
+     * @param $includes
+     * @param $fields
+     * @param $filters
+     * @param $offset
+     * @param $limit
+     * @param $order
+     * @return \RecordSet
+     * @throws \Exception
+     */
+//    function get_fk_record($resName,$recId,$fkName,$includes,$fields,$filters,$offset,$limit,$order)
+//    {
+//        // todo: remove??
+//
+//        return $this->get_records($rel["table"],$includes,$fields,$filters,$offset,$limit,$order);
+//    }
 
+
+    /**
+     * @param $resName
+     * @param $includes
+     * @param $fields
+     * @param $filters
+     * @param int $offset
+     * @param int $limit
+     * @param array $order
+     * @return array
+     * @throws \Exception
+     */
+    function get_records($resName, $includes, $fields, $filters, $offset=0, $limit=10, $order=[])
+    {
+        if(!$this->dm->is_valid_resource($resName))
+            throw new \Exception("Invalid resource $resName");
+
+        /**
+         * it parses the includes into a relations tree, where each node contains:
+         * - name: name of the table
+         * - alias: alias for the table
+         * - lnkFld: field which indicated by the parent FK field. To be used in JOIN definition
+         * - fields: table fields (retrieved from DataBase data model which is important to be accurate)
+         * - select: fields to be included in the SELECT part (defaults to *)
+         * - includes: associative array of tables to be joined, where key is an FK field pointing to the related table
+         * - join: FK field of parent to be used in LEFT JOIN...ON expression, in tableAlias.fieldName format
+         * - keyFld: primary key field
+         * - noFlds: number of fields to be included in the result (count(select) when select!=* or count(fields) otherwise
+         * - start: column position in result row where current table begins
+         * -
+         *
+         * @param Datamodel $dm
+         * @param $top
+         * @param string $includeStr string of comma separated includes
+         * @param string $fieldsStr string of comma separated field names to include
+         * @return array
+         */
+        function generate_sql_parts(&$dm,$top, $includeStr, $fieldsStr)
+        {
+            // parse & prepare includes
+            $includeStr = trim($includeStr);
+            $includes = $includeStr===""?[]:explode(",",$includeStr);
+
+            sort($includes);
+            for($i=0;$i<count($includes);$i++) {
+                $includes[$i] = explode(".",$includes[$i]);
+            }
+
+            // init relationTree with top element
+            try {
+                $relationTree = [
+                    $top => [
+                        "name" => $top,
+                        "alias" => $top,
+                        "fields" => $dm->get_selectable_fields($top),
+                        "select" => [],
+                        "includes" => []
+                    ]
+                ];
+            }
+            catch (Exception $exception) {
+                throw new Exception("Base table is invalid",400);
+            }
+
+
+            // populate relationTree tree by processing includes
+            foreach ($includes as $include) {
+                process_includes($dm,$relationTree[$top],$include);
+            }
+
+
+            // parse & prepare fields as in format path + field name
+            // where path is the way to navigate within the object
+            $fields = explode(",",$fieldsStr);
+            for($i=0;$i<count($fields);$i++) {
+                $fields[$i] = explode(".",trim($fields[$i]));
+                $fld = array_pop($fields[$i]);
+                array_unshift($fields[$i],$top);
+                $tmp = implode(".includes.",$fields[$i]);
+                $fields[$i] = [
+                    "path"=>explode(".",$tmp),
+                    "field"=>$fld
+                ];
+            }
+
+            // add selected fields
+            foreach ($fields as $field) {
+                try {
+                    // identify node indicated by path
+                    $table =& find_in_tree($relationTree, $field["path"]);
+                    if(in_array($field["field"],$table["fields"])){
+                        $table["select"][] = $field["field"];
+                    }
+                }
+                catch (Exception $exception) {
+                    //echo "wrong path";
+                }
+                //print_r($res["fields"][$field[""]]);
+            }
+
+            $select = [];
+            $join = [];
+            prepare_query($dm,$relationTree[$top],0,$select,$join);
+
+            //print_r($join);
+            $select = implode(", ",array_map(function($sel){
+                return implode(", ",$sel);
+            },$select));
+            $join = implode(" \n",$join);
+            return [$select,$join,$relationTree];
+        }
+
+        /**
+         * parses
+         * @param Datamodel $dm
+         * @param $obj
+         * @param $start
+         * @param $select
+         * @param $join
+         * @return int
+         */
+        function prepare_query(&$dm,&$obj, $start,&$select,&$join)
+        {
+            try {
+                $id = $dm->get_key_fld($obj["name"]);
+            }
+            catch (Exception $exception) {
+                $id = null;
+            }
+
+            $obj["keyFld"] = $id;
+            $obj["start"] = $start;
+
+            if(count($obj["select"])===0) {
+                $obj["select"] = $obj["fields"];
+            }
+
+            $obj["select"][]=$id;
+            $obj["select"] = array_unique($obj["select"]);
+            $obj["noFlds"] = count($obj["select"]);
+
+            // extract ID field position in the fields array
+            $obj["keyFldPos"] = $obj["keyFld"]?array_search($obj["keyFld"],$obj["fields"]):null;
+            $obj["keyFldPos"] = $obj["keyFldPos"]===false?null:$obj["keyFldPos"];
+
+
+            // define currAlias global to be able to refer to it from inside the callback function
+            global $currAlias;
+            $currAlias = $obj["alias"];
+
+            // add alias prefix to field selection using an array_map and an anonymous function as callback
+            $select[] = array_map(function($item){
+                global $currAlias;
+                return $currAlias.".$item";
+            },$obj["select"]);
+
+            // generate LEFT JOIN for joined tables
+            if(isset($obj["join"]))
+                $join[] = sprintf("\nLEFT JOIN %s AS %s ON %s=%s.%s",
+                    $obj["name"],$obj["alias"],$obj["join"],$obj["alias"],$obj["lnkFld"]);
+
+            $start += $obj["noFlds"];
+            foreach (array_keys($obj["includes"]) as $key) {
+                $start = prepare_query($dm,$obj["includes"][$key],$start,$select,$join);
+            }
+
+            return $start;
+        }
+
+        /**
+         * generate include tree to be used for generating the SELECT clause
+         *
+         * @param Datamodel $dm
+         * @param array $parent
+         * @param array $include include path as array, where lower indices are parents of higher ones
+         */
+        function process_includes(&$dm,&$parent, $include)
+        {
+            // if empty includes return
+            if(!count($include)) {
+                return;
+            }
+
+            // extract current level (first element of the array)
+            $attr = array_shift($include);
+
+            // generate alias
+            $alias = $parent["alias"]."_".$attr;
+
+            try {
+                // retrieves relation between parent and current level
+                // throws exception. caught lower and ignored
+                $rel = $dm->get_fk_relation($parent["name"], $attr);
+
+                // check if joined resource already there and if not create it
+                if(!array_key_exists($attr,$parent["includes"]))
+                    $parent["includes"][$attr] = [
+                        "name"=>$rel["table"],
+                        "alias"=>$alias,
+                        "lnkFld"=>$rel["field"],
+                        "fields"=>$dm->get_selectable_fields($rel["table"]),
+                        "select"=>[],
+                        "includes"=>[],
+                        "join"=>$parent["alias"].".".$attr
+                    ];
+                process_includes($dm,$parent["includes"][$attr],$include);
+            }
+            catch (Exception $exception) {
+                echo $exception->getMessage()."\n";
+            }
+        }
+
+        /**
+         * @param array $tree reference to array
+         * @param $path
+         * @return null|array
+         * @throws Exception
+         */
+        function &find_in_tree(&$tree, $path)
+        {
+            if(count($path)==0)
+                return $tree;
+
+            $c = array_shift($path);
+            if(!isset($tree[$c])) {
+                throw new Exception("Wrong path");
+            }
+            return find_in_tree($tree[$c],$path);
+        }
+
+        /**
+         * @param $node
+         * @param $row
+         * @param $allRecs
+         * @return null|\stdClass
+         */
+        function parse_result_row($node, $row,&$allRecs)
+        {
+            $id = $node["keyFld"]?$row[$node["keyFldPos"]]:null;
+            $rec = null;
+
+            if($id) {
+                $objIdx = $node["name"] . "_" . $id;
+                if(isset($allRecs[$objIdx]))
+                    $rec &= $allRecs[$objIdx];
+            }
+
+            if(is_null($rec)){
+                $attributes = new \stdClass();
+                for ($i = 0; $i < $node["noFlds"]; $i++) {
+                    $fieldName = $node["fields"][$i];
+                    $attributes->$fieldName = $row[$node["start"] + $i];
+                }
+                $rec = new \stdClass();
+                $rec->id = $id;
+                $rec->type = $node["name"];
+                $rec->attributes = $attributes;
+
+                if(isset($objIdx))
+                    $allRecs[$objIdx] = $rec;
+            }
+
+            if(!isset($node["includes"]) || count($node["includes"])==0)
+                return $rec;
+
+            foreach($node["includes"] as $fk=>$incNode) {
+                if(!is_null($rec->attributes->$fk))
+                    $rec->attributes->$fk = parse_result_row($incNode,$row,$allRecs);
+            }
+            return $rec;
+        }
+
+        $where = 1;
+
+        $countSql = "SELECT count(*) as cnt FROM $resName WHERE $where";
+        $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
+
+        $recordSet = [];
+        if($totalRecs==0)
+            return [$recordSet,0];
+
+        list($select,$join,$relTree) = generate_sql_parts($this->dm,$resName,$includes,$fields);
+        //print_r($relTree);
+
+
+        $mainSql = "SELECT $select FROM {$relTree[$resName]["name"]} AS {$relTree[$resName]["alias"]} "
+            .($join!==""?$join:"")
+            ." WHERE $where"
+            ." LIMIT $offset,$limit";
+
+
+        /** @var \CI_DB_result $res */
+        $res = $this->dbdrv->query($mainSql);
+        $rows = $res->result_array_num();
+        //print_r($relTree);
+        $allRecs = [];
+        foreach ($rows as $row) {
+            $newRec = parse_result_row($relTree[$resName],$row,$allRecs);
+
+            $recordSet[] = $newRec;
+        }
+
+        return [$recordSet,$totalRecs];
+
+    }
     /**
      * @param string $resName
      * @param array $includes
@@ -136,7 +467,7 @@ class Records {
      * @param array $order
      * @return \RecordSet
      */
-    function get_records($resName, $includes, $fields, $filters, $offset=0, $limit=10, $order=[]) {
+    function get_records_old($resName, $includes, $fields, $filters, $offset=0, $limit=10, $order=[]) {
         //echo "get records";
         // validate main inputs
 
@@ -156,7 +487,13 @@ class Records {
         $joinArr = [];
         foreach ($includes as $include) {
             // get relation
-            $rel = $this->dm->get_fk_relation($resName,$include);
+            try {
+                $rel = $this->dm->get_fk_relation($resName, $include);
+            }
+            catch (\Exception $exception) {
+                $rel = null;
+            }
+
             if($rel) {
                 $alias = sprintf("%s_%s",$include,$rel["table"]);
                 $joinArr[$include] = [
@@ -377,7 +714,6 @@ class Records {
         $q = $this->dbdrv->query($selSql);
 
         if($q->num_rows()>1) {
-            print_r($q->result_array());
             log_message("debug","More then one records returned on Insert new record: $insSql / $selSql");
             throw new \Exception("More then one records returned",500);
         }
@@ -475,7 +811,7 @@ class Records {
      * @param $srcId
      * @param $relation
      * @param $data
-     * @return \Response
+     * @return bool
      */
     function create_relationships($srcTbl,$srcId,$relation,$data) {
         if(!is_array($data))
@@ -496,18 +832,17 @@ class Records {
             $this->dbdrv->db_debug = TRUE;
             if ($this->dbdrv->trans_status() === FALSE) {
                 $this->dbdrv->trans_rollback();
-                return \Response::make(false,404,"Insert failed");
+                throw new \Exception("Insert failed",500);
             }
             else {
                 $this->dbdrv->trans_commit();
-                return \Response::make(true,204);
+                return true;
             }
 
         }
         catch(\Exception $e) {
-            print_r($e);
+            throw new $e;
         }
-        return \Response::make(false,null,"Could not create relationship.");
     }
 
 

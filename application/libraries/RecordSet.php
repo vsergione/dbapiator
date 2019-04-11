@@ -1,4 +1,7 @@
-<?php  if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+<?php
+
+if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
 
 /**
  * Class Recordset
@@ -34,6 +37,7 @@ class RecordSet {
         }
     }
 
+
     /**
      * add new  Record to recordset
      * @param $type
@@ -52,6 +56,28 @@ class RecordSet {
             $id = $record[$idFld];
         }
         $this->records[] = new Record($type,$id,$record);
+        return $this->records[count($this->records)-1];
+    }
+
+    /**
+     * @param $rec
+     * @return mixed
+     */
+    function &add_rec($rec)
+    {
+        $this->records[] = $rec;
+        return $this->records[count($this->records)-1];
+    }
+
+    /**
+     * @param $arr
+     * @param $type
+     * @param $idFld
+     * @return mixed
+     */
+    function &add_array_as_rec($arr,$type,$idFld)
+    {
+        $this->records[] = new Record($type,$arr[$idFld],$arr);
         return $this->records[count($this->records)-1];
     }
 
@@ -121,6 +147,7 @@ class JSONApiMeta {
     }
 
 }
+
 /**
  * Class JSONApiResponse
  * @property array|object $data
@@ -133,23 +160,26 @@ class JSONApiResponse {
     public $meta=[];
     public $links=[];
     public $errors=[];
+    private $root;
 
     /**
      * remove properties which are empy
      */
-    private function cleanUp() {
+    public function cleanUp() {
         if(empty($this->meta))
             unset($this->meta);
         if(empty($this->links))
             unset($this->links);
         if(empty($this->includes))
             unset($this->includes);
-        if(empty($this->errors) || !empty($this->data))
+        if(is_null($this->errors))
             unset($this->errors);
         if(!empty($this->errors) && empty($this->data))
             unset($this->data);
         // ToDo: add remove data when data is null & meta not null; need to implement data null
     }
+
+
 
     /**
      * @param bool $pretty
@@ -160,17 +190,25 @@ class JSONApiResponse {
         return json_encode($this, $pretty ? (JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : 0);
     }
 
+    static function create($data, $meta=null, $links=null, $errors=null)
+    {
+        return new JSONApiResponse($data,$meta,$links,$errors);
+    }
+
     /**
      * JSONApiResponse constructor.
      * @param RecordSet|Record $data
+     * @param null $rootResponse
      * @param JSONApiMeta $meta
      * @param JSONApiLinks $links
+     * @param null $errors
      */
-    function __construct ($data, $meta=null, $links=null,$errors=null)
+    function __construct ($data, &$rootResponse=null, $meta=null, $links=null, $errors=null)
     {
         $this->meta = $meta;
         $this->links = $links==null?new stdClass():$links;
         $this->errors = $errors;
+        $this->root = is_null($rootResponse)?$this:$rootResponse;
 
         if(get_class($data)=="RecordSet")
             foreach ($data->records as $record)
@@ -179,11 +217,27 @@ class JSONApiResponse {
             $this->data = $this->add_record($data);
     }
 
+
     /**
      * @param Record $record
      * @return Record
      */
     function add_record($record) {
+        /**
+         * @param Record $rec
+         * @param JSONApiResponse $rs
+         */
+        function parse_record($rec,&$rs)
+        {
+            foreach ($rec->attributes as $attr=>$val) {
+                if(!is_object($val))
+                    continue;
+
+
+            }
+        }
+
+
         if(isset($record->attributes))
             foreach ($record->attributes as $attribute=>$value) {
                 if(gettype($value)=="object") {

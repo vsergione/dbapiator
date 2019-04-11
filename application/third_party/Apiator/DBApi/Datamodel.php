@@ -226,13 +226,17 @@ class Datamodel {
      * @param $resName
      * @param $field
      * @return Response
+     * @throws \Exception
      */
     function get_fk_relation($resName, $field) {
+        if(!$this->is_valid_resource($resName))
+            throw new \Exception("Invalid resource $resName",400);
+
         if(!$this->is_valid_field($resName,$field))
-            return null;
+            throw new \Exception("Invalid field $field",400);
 
         if(!isset($this->dataModel[$resName]["fields"][$field]["foreignKey"]))
-            return null;
+            throw new \Exception("Field $field is not a foreign key",400);
 
         return $this->dataModel[$resName]["fields"][$field]["foreignKey"];
     }
@@ -561,6 +565,20 @@ class Datamodel {
     function delete_allowed($tableName)
     {
         return isset($this->dataModel[$tableName]["delete"]) && $this->dataModel[$tableName]["delete"];
+    }
+
+    public function get_selectable_fields ($tableName)
+    {
+        if(!isset($this->dataModel[$tableName]))
+            throw new Exception("Invalid table $tableName",404);
+
+        $fields = [];
+        foreach ($this->dataModel[$tableName]["fields"] as $fldName=>$fldSpec) {
+            if(isset($fldSpec["select"]) && $fldSpec["select"]) {
+                $fields[] = $fldName;
+            }
+        }
+        return $fields;
     }
 }
 

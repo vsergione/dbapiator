@@ -1,0 +1,320 @@
+<?php
+/***********************************************************
+ * parse include parameter and fields parameter
+ * and generates the corresponding SQL query sections:
+ * - LEFT JOIN part for includes
+ * - SELECT part for fields
+ *
+ **********************************************************/
+
+/**
+ * it parses the includes into a relations tree, where each node contains:
+ * - name: name of the table
+ * - alias: alias for the table
+ * - lnkFld: field which indicated by the parent FK field. To be used in JOIN definition
+ * - fields: table fields (retrieved from DataBase data model which is important to be accurate)
+ * - select: fields to be included in the SELECT part (defaults to *)
+ * - includes: associative array of tables to be joined, where key is an FK field pointing to the related table
+ * - join: FK field of parent to be used in LEFT JOIN...ON expression, in tableAlias.fieldName format
+ * - keyFld: primary key field
+ * - noFlds: number of fields to be included in the result (count(select) when select!=* or count(fields) otherwise
+ * - start: column position in result row where current table begins
+ * -
+ *
+ * @param $top
+ * @param string $includeStr string of comma separated includes
+ * @param string $fieldsStr string of comma separated field names to include
+ * @return array
+ * @throws Exception
+ */
+function generate_sql_parts($top, $includeStr, $fieldsStr)
+{
+    $dm = new DM();
+
+    // parse & prepare includes
+    $includes = explode(",",$includeStr);
+    sort($includes);
+    for($i=0;$i<count($includes);$i++) {
+        $includes[$i] = explode(".",$includes[$i]);
+    }
+
+    // init relationTree with top element
+    try {
+        $relationTree = [
+            $top => [
+                "name" => $top,
+                "alias" => $top,
+                "fields" => $dm->get_selectable_fields($top),
+                "select" => [],
+                "includes" => []
+            ]
+        ];
+    }
+    catch (Exception $exception) {
+        throw new Exception("Base table is invalid",400);
+    }
+
+    // populate relationTree tree by processing includes
+    foreach ($includes as $include) {
+        process_includes($dm,$relationTree[$top],$include);
+    }
+
+    // parse & prepare fields as in format path + field name
+    // where path is the way to navigate within the object
+    $fields = explode(",",$fieldsStr);
+    for($i=0;$i<count($fields);$i++) {
+        $fields[$i] = explode(".",trim($fields[$i]));
+        $fld = array_pop($fields[$i]);
+        array_unshift($fields[$i],$top);
+        $tmp = implode(".includes.",$fields[$i]);
+        $fields[$i] = [
+            "path"=>explode(".",$tmp),
+            "field"=>$fld
+        ];
+    }
+
+    // add selected fields
+    foreach ($fields as $field) {
+        try {
+            // identify node indicated by path
+            $table =& get_tree_node($relationTree, $field["path"]);
+            if(in_array($field["field"],$table["fields"])){
+                $table["select"][] = $field["field"];
+            }
+        }
+        catch (Exception $exception) {
+            //echo "wrong path";
+        }
+        //print_r($res["fields"][$field[""]]);
+    }
+
+    $select = [];
+    $join = [];
+    prepare_query($relationTree[$top],$dm,0,$select,$join);
+
+    //print_r($join);
+    $select = implode(", ",array_map(function($sel){
+        return implode(", ",$sel);
+    },$select));
+    $join = implode(" \n",$join);
+    return [$select,$join,$relationTree];
+}
+
+/**
+ * parses
+ * @param $obj
+ * @param $dm DM
+ * @param $start
+ * @param $select
+ * @param $join
+ * @return int
+ */
+function prepare_query(&$obj, &$dm, $start,&$select,&$join)
+{
+    try {
+        $id = $dm->get_key_fld($obj["name"]);
+    }
+    catch (Exception $exception) {
+        $id = null;
+    }
+
+    $obj["keyFld"] = $id;
+    $obj["start"] = $start;
+
+    if(count($obj["select"])===0) {
+        $obj["select"]  =$obj["fields"];
+    }
+    $obj["select"][]=$id;
+    $obj["select"] = array_unique($obj["select"]);
+    $obj["noFlds"] = count($obj["select"]);
+
+
+    // define currAlias global to be able to refer to it from inside the callback function
+    global $currAlias;
+    $currAlias = $obj["alias"];
+
+    // add alias prefix to field selection using an array_map and an anonymous function as callback
+    $select[] = array_map(function($item){
+        global $currAlias;
+        return $currAlias.".$item";
+    },$obj["select"]);
+
+    // generate LEFT JOIN for joined tables
+    if(isset($obj["join"]))
+        $join[] = sprintf("LEFT JOIN %s AS %s ON %s=%s.%s",
+            $obj["name"],$obj["alias"],$obj["join"],$obj["alias"],$obj["lnkFld"]);
+    
+    $start += $obj["noFlds"];
+    foreach (array_keys($obj["includes"]) as $key) {
+        $start = prepare_query($obj["includes"][$key],$dm,$start,$select,$join);
+    }
+
+    return $start;
+}
+
+/**
+ * generate include tree to be used for generating the SELECT clause
+ *
+ * @param DM $apiDm
+ * @param array $parent
+ * @param array $include include path as array, where lower indices are parents of higher ones
+ */
+function process_includes(&$apiDm, &$parent, $include)
+{
+    // if empty includes return
+    if(!count($include)) {
+        return;
+    }
+
+    // extract current level (first element of the array)
+    $attr = array_shift($include);
+
+    // generate alias
+    $alias = $parent["alias"]."_".$attr;
+
+    try {
+        // retrieves relation between parent and current level
+        // throws exception. caught lower and ignored
+        $rel = $apiDm->get_fk_relation($parent["name"], $attr);
+
+        // check if joined resource already there and if not create it
+        if(!array_key_exists($attr,$parent["includes"]))
+            $parent["includes"][$attr] = [
+                "name"=>$rel["table"],
+                "alias"=>$alias,
+                "lnkFld"=>$rel["field"],
+                "fields"=>$apiDm->get_selectable_fields($rel["table"]),
+                "select"=>[],
+                "includes"=>[],
+                "join"=>$parent["alias"].".".$attr
+            ];
+        process_includes($apiDm,$parent["includes"][$attr],$include);
+    }
+    catch (Exception $exception) {
+        echo $exception->getMessage()."\n";
+    }
+}
+
+/**
+ * @param array $obj reference to array
+ * @param $path
+ * @return null|array
+ * @throws Exception
+ */
+function &get_tree_node(&$obj, $path)
+{
+    if(count($path)==0)
+        return $obj;
+
+    $c = array_shift($path);
+    if(!isset($obj[$c])) {
+        throw new Exception("Wrong path");
+    }
+    return get_tree_node($obj[$c],$path);
+}
+
+
+class DM{
+    /**
+     * @param $tblName
+     * @param $fieldName
+     * @return array
+     * @throws Exception
+     */
+    function get_fk_relation($tblName, $fieldName)
+    {
+        global $dataModel;
+        if(!isset($dataModel[$tblName]))
+            throw new Exception("Invalid table $tblName",404);
+
+        if(!isset($dataModel[$tblName]["fields"][$fieldName]))
+            throw new Exception("Invalid field $tblName.$fieldName",404);
+
+        if(!isset($dataModel[$tblName]["fields"][$fieldName]["foreignKey"]))
+            throw new Exception("Field $tblName.$fieldName is not a foreign key");
+
+        return $dataModel[$tblName]["fields"][$fieldName]["foreignKey"];
+    }
+
+    function get_selectable_fields($tblName)
+    {
+        global $dataModel;
+        if(!isset($dataModel[$tblName]))
+            throw new Exception("Invalid table $tblName",404);
+
+        $flds = [];
+        foreach ($dataModel[$tblName]["fields"] as $fldName=>$fldSpec) {
+            if(isset($fldSpec["select"]) && $fldSpec["select"]) {
+                $flds[] = $fldName;
+            }
+        }
+        return $flds;
+    }
+
+    /**
+     * @param $tblName
+     * @return array
+     * @throws Exception
+     */
+    function get_all_fields_names($tblName)
+    {
+        global $dataModel;
+        if(!isset($dataModel[$tblName]))
+            throw new Exception("Invalid table $tblName",404);
+
+        return array_keys($dataModel[$tblName]["fields"]);
+    }
+
+    /**
+     * @param $tblName
+     * @return mixed
+     * @throws Exception
+     */
+    function get_key_fld($tblName)
+    {
+        global $dataModel;
+        if(!isset($dataModel[$tblName]))
+            throw new Exception("Invalid table $tblName",404);
+
+        return $dataModel[$tblName]["keyFld"];
+    }
+
+    function is_selectable($tblName,$fieldName)
+    {
+        global $dataModel;
+        if(!isset($dataModel[$tblName]))
+            throw new Exception("Invalid table $tblName",404);
+
+        if(!isset($dataModel[$tblName]["fields"][$fieldName]))
+            throw new Exception("Invalid field $tblName.$fieldName",404);
+
+        return isset($dataModel[$tblName]["fields"][$fieldName]["select"])?$dataModel[$tblName]["fields"][$fieldName]["select"]:true;
+
+    }
+}
+
+$structure = include "/var/www/domains/apiator/apiator_data/___apis/5ca88e58b9dde/structure.php";
+$permissions = include "/var/www/domains/apiator/apiator_data/___apis/5ca88e58b9dde/profiles/default.php";
+$dataModel = array_merge_recursive($structure,$permissions);
+//print_r($dbStructure);
+
+$includes = $_GET["includes"];
+$fields = $_GET["fields"];
+/*
+lbl => tbl1.fields.lbl
+
+lnk1.lnk1.lbl1 => tbl1.includes.lnk1.includes.lnk1.fields.lbl1
+
+lnk1.lnk2.lnk1.ctime => tbl1.includes.lnk1.includes.lnk2.includes.lnk1.fields.ctime
+
+lnk1.utime => tbl1.includes.lnk1.fields.utime
+*/
+
+
+$res = generate_sql_parts("tbl1",$includes,$fields);
+//print_r($res);
+//header("Content-type: application/json");
+
+
+echo json_encode($res,JSON_PRETTY_PRINT);
+
