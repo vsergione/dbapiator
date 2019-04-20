@@ -22,7 +22,11 @@ class Relationships extends json_ready
     {
     }
 
-    function addRelation($name,Relationship $relation)
+    /**
+     * @param $name
+     * @param Relationship|null $relation
+     */
+    function addRelation($name,$relation)
     {
         $this->rels[$name] = $relation;
 
@@ -43,8 +47,11 @@ class Relationships extends json_ready
         foreach ($this->rels as $key=>$val) {
             //echo get_class($val)." - ".$key."\n";
             //print_r($val);
+            if(is_null($val))
+                $ret[$key] = $val;
+            else
+                $ret[$key] = $val->json_data();
 
-            $ret[$key] = $val->json_data();
         }
         return $ret;
     }

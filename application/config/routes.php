@@ -62,20 +62,22 @@ $route["^api/([\w\-\_]+)"] = "$controller/$1";
 // APIID/EP
 //$route["^api/([\w\-\_]+)/([\w\-\_]+)"] = "$controller/api/$1";
 
-// APIID/RESOURCE
+// api/$apiId/$resName
 $route["^api/([\w\-\_]+)/([\w\-\_]+)"]["get"] = "$controller/fetch_multiple_records/$1/$2";
 $route["^api/([\w\-\_]+)/([\w\-\_]+)"]["post"] = "$controller/simple_insert/$1/$2";
 
 $route["^api/([\w\-\_]+)/([\w\-\_]+)"]["delete"] = "$controller/bulk_delete/$1/$2";
 $route["^api/([\w\-\_]+)/([\w\-\_]+)"]["put"] = "$controller/update/$1/$2";
 
-// APIID/RESOURCE/ID
-$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)"]["get"] = "$controller/fetch_record_by_id/$1/$2/$3";
-$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)/ref/([\w\-\_]+)"]["get"] = "$controller/fetch_fk_record/$1/$2/$3/$4";
-$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)"]["delete"] = "$controller/single_delete/$1/$2/$3";
-$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)"]["put"] = "$controller/update/$1/$2/$3";
-$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)"]["post"] = "$controller/create/$1/$2/$3";
 
+
+// api/$apiId/$resName/$resId
+$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)$"]["get"] = "$controller/fetch_record_by_id/$1/$2/$3";
+$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)$"]["delete"] = "$controller/single_delete/$1/$2/$3";
+$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)$"]["put"] = "$controller/update/$1/$2/$3";
+$route["^api/([\w\-\_]+)/([\w\-\_]+)/([\w\-\_]+)$"]["post"] = "$controller/create/$1/$2/$3";
+
+$route["^api\/([\w\-\_]+)\/([\w\-\_]+)\/([\w\-\_]+)\/relationships\/([\w\-\_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3/$4";
 
 
 // APIID/RESOURCE/ID/relationships/RELNAME

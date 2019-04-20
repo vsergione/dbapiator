@@ -45,6 +45,81 @@ class Datamodel {
     }
 
     /**
+     * @param $resName
+     * @param $fldName
+     * @return bool
+     * @throws \Exception
+     */
+    function field_is_selectable($resName, $fldName)
+    {
+        if(!isset($this->dataModel[$resName]["fields"][$fldName]))
+            throw new \Exception("Invalid field $fldName (is_selectable)",400);
+        return isset($this->dataModel[$resName]["fields"][$fldName]["select"])?
+            $this->dataModel[$resName]["fields"][$fldName]["select"]:false;
+    }
+
+    /**
+     * @param $resName
+     * @param $fldName
+     * @return bool
+     * @throws \Exception
+     */
+    function field_is_insertable($resName, $fldName)
+    {
+        //print_r($this->dataModel[$resName]);
+        if(!isset($this->dataModel[$resName]["fields"][$fldName]))
+            throw new \Exception("Invalid field $fldName (is_insertable)",400);
+        return isset($this->dataModel[$resName]["fields"][$fldName]["insert"])?
+            $this->dataModel[$resName]["fields"][$fldName]["insert"]:false;
+    }
+
+    /**
+     * @param $resName
+     * @param $fldName
+     * @return bool
+     * @throws \Exception
+     */
+    function field_is_updateable($resName, $fldName)
+    {
+        if(!isset($this->dataModel[$resName]["fields"][$fldName]))
+            throw new \Exception("Invalid field $fldName (is_updateable)",400);
+        //print_r($this->dataModel[$resName]["fields"][$fldName]["update"]);
+        return isset($this->dataModel[$resName]["fields"][$fldName]["update"])?
+            $this->dataModel[$resName]["fields"][$fldName]["update"]:false;
+    }
+
+    /**
+     * @param $resName
+     * @param $fldName
+     * @return bool
+     * @throws \Exception
+     */
+    function field_is_sortable($resName, $fldName)
+    {
+        if(!isset($this->dataModel[$resName]["fields"][$fldName]))
+            throw new \Exception("Invalid field $fldName (is_sortable)",400);
+        return isset($this->dataModel[$resName]["fields"][$fldName]["sortable"])?
+            $this->dataModel[$resName]["fields"][$fldName]["sortable"]:false;
+    }
+
+    /**
+     * @param $resName
+     * @param $fldName
+     * @return bool
+     * @throws \Exception
+     */
+    function field_is_searchable($resName, $fldName)
+    {
+        if(!isset($this->dataModel[$resName]["fields"][$fldName]))
+            throw new \Exception("Invalid field $fldName (is_searchable)",400);
+        return isset($this->dataModel[$resName]["fields"][$fldName]["sortable"])?
+            $this->dataModel[$resName]["fields"][$fldName]["searchable"]:false;
+    }
+
+
+
+
+    /**
      * gets configuration of table or full model when no tableName is provided
      *
      * @param string $tableName table name
@@ -105,15 +180,6 @@ class Datamodel {
         return null;
     }
 
-    /**
-     * @alias Data_model::get_rel_link_tlb()
-     * @param string $tableName
-     * @param string $relationName
-     * @return null|string
-     */
-    function get_relation_link_table($tableName,$relationName)  {
-        return $this->get_rel_link_tlb($tableName,$relationName);
-    }
 
 
     /**
@@ -134,24 +200,19 @@ class Datamodel {
      * @param string $relationName relation name
      * @return string relation type or null when relation name not found
      */
-    function get_rel_type($tableName,$relationName) {
+    function get_relation_type($tableName, $relationName) {
         if($this->is_valid_relation($tableName,$relationName))
             return $this->dataModel[$tableName]["relations"][$relationName]["relType"];
         return null;
     }
-    /**
-     * @alias get_rel_type()
-     */
-    function get_relation_type($tableName,$relationName) {
-        return $this->get_rel_type($tableName,$relationName);
-    }
+
 
     /**
      * checks if resource exists
      * @param string $name
      * @return boolean true if exists, false otherwise
      */
-    function is_valid_resource($name) {
+    function resource_exists($name) {
         return array_key_exists($name,$this->dataModel);
     }
 
@@ -197,16 +258,7 @@ class Datamodel {
      * @return bool
      */
     function is_valid_field($tableName, $fieldName) {
-        return $this->is_valid_resource($tableName) && array_key_exists($fieldName,$this->dataModel[$tableName]["fields"]);
-    }
-
-    /**
-     * @param $tableName
-     * @param $fieldName
-     * @return bool
-     */
-    function is_field_updateable($tableName,$fieldName) {
-        return $this->is_valid_field($tableName,$fieldName) && $this->dataModel[$tableName]["fields"][$fieldName]["update"];
+        return $this->resource_exists($tableName) && array_key_exists($fieldName,$this->dataModel[$tableName]["fields"]);
     }
 
     /**
@@ -228,8 +280,9 @@ class Datamodel {
      * @return Response
      * @throws \Exception
      */
-    function get_fk_relation($resName, $field) {
-        if(!$this->is_valid_resource($resName))
+    function get_outbound_relation($resName, $field) {
+
+        if(!$this->resource_exists($resName))
             throw new \Exception("Invalid resource $resName",400);
 
         if(!$this->is_valid_field($resName,$field))
@@ -242,11 +295,28 @@ class Datamodel {
     }
 
     /**
+     * @param $table
+     * @param $relName
+     * @return mixed
+     * @throws \Exception
+     */
+    function get_relationship($table,$relName)
+    {
+        if (!$this->resource_exists($table))
+            throw new \Exception("Invalid resource $table", 400);
+        if (!isset($this->dataModel[$table]["referencedBy"])
+            || !isset($this->dataModel[$table]["referencedBy"][$relName]))
+            throw new \Exception("Invalid relationship $relName of $table");
+
+        return $this->dataModel[$table]["referencedBy"][$relName];
+    }
+
+    /**
      * type validation & type casting of proposed value against field type
      *
      * @param string $tableName table name
      * @param string $fieldName field name
-     * @param string $value value to be validated
+     * @param mixed $value value to be validated
      * @return mixed
      * @throws \Exception
      */
@@ -288,6 +358,7 @@ class Datamodel {
             return null;
 
         //print_r($value);
+
         if(is_object($value)) {
             if (array_key_exists("foreignKey", $fields[$fieldName])
                 && $fields[$fieldName]["foreignKey"]["table"] == $value->data->type) {
@@ -432,20 +503,6 @@ class Datamodel {
         throw new \Exception($msg,400);
     }
 
-    /**
-     * checks if field is searcheable
-     * defaults to yes when no searchable fld present in the field config
-     * @param $resName
-     * @param $field
-     * @return bool
-     */
-    function is_searchable_field($resName, $field) {
-        if(!$this->is_valid_field($resName,$field))
-            return false;
-        return array_key_exists("searchable",$this->dataModel[$resName]["fields"][$field])?
-            $this->dataModel[$resName]["fields"][$field]["searchable"]:true;
-    }
-
 
     /**
      * checks if
@@ -500,33 +557,35 @@ class Datamodel {
 
     /**
      * @param $resName
-     * @param $attrs
+     * @param $attributes
      * @param string $operation
      * @return mixed
      * TODO: review this method
      * @throws \Exception
      */
-    function validate_object_attributes($resName, $attrs, $operation="ins") {
-        if(!$this->is_valid_resource($resName))
-            throw new \Exception("table '$resName' not found",400);
+    function validate_object_attributes($resName, $attributes, $operation="ins") {
 
-        $attrFlds = array_keys(get_object_vars($attrs));
+        if(!$this->resource_exists($resName))
+            throw new \Exception("table '$resName' not found",400);
+        //if(!isset($data->attributes)) throw new
+
+        $attributesNames = array_keys($attributes);
 
         foreach($this->dataModel[$resName]["fields"] as $fldName=> $fldSpec) {
-            if($fldSpec["required"] && is_null($fldSpec["default"]) && !in_array($fldName,$attrFlds) && $operation=="ins")
+            if($fldSpec["required"] && is_null($fldSpec["default"]) && !in_array($fldName,$attributesNames) && $operation=="ins")
                 throw new \Exception("Required attribute '$fldName' not provided",400);
 
             // field not allowed to insert
-            if(in_array($fldName,$attrFlds) && $fldSpec["insert"]==false && $operation=="ins")
+            if(in_array($fldName,$attributesNames) && $fldSpec["insert"]==false && $operation=="ins")
                 throw new \Exception("Attribute '$fldName' not allowed to be inserted",400);
 
             // field not allowed to update
-            if(in_array($fldName,$attrFlds) && $fldSpec["update"]==false && $operation=="upd")
+            if(in_array($fldName,$attributesNames) && $fldSpec["update"]==false && $operation=="upd")
                 throw new \Exception("Attribute '$fldName' not allowed to be updated",400);
 
         }
 
-        foreach($attrs as $attrName=>$attrVal) {
+        foreach($attributes as $attrName=> $attrVal) {
             $attrVal = $this->is_valid_value($resName,$attrName,$attrVal);
 
             /**
@@ -536,9 +595,9 @@ class Datamodel {
 
 
             if(!is_object($attrVal))
-                $attrs->$attrName = $attrVal;
+                $attributes[$attrName] = $attrVal;
         }
-        return $attrs;
+        return $attributes;
     }
 
 
@@ -558,19 +617,14 @@ class Datamodel {
     }
 
     /**
-     * returns if it is allowed to delete records from table $tableName
      * @param $tableName
-     * @return bool
+     * @return array
+     * @throws \Exception
      */
-    function delete_allowed($tableName)
-    {
-        return isset($this->dataModel[$tableName]["delete"]) && $this->dataModel[$tableName]["delete"];
-    }
-
     public function get_selectable_fields ($tableName)
     {
         if(!isset($this->dataModel[$tableName]))
-            throw new Exception("Invalid table $tableName",404);
+            throw new \Exception("Invalid table $tableName",404);
 
         $fields = [];
         foreach ($this->dataModel[$tableName]["fields"] as $fldName=>$fldSpec) {
@@ -580,6 +634,58 @@ class Datamodel {
         }
         return $fields;
     }
+
+    /**
+     * @param $tableName
+     * @param $relName
+     * @return mixed
+     * @throws \Exception
+     */
+    public function get_inbound_relation ($tableName,$relName)
+    {
+        if(!isset($this->dataModel[$tableName]["referencedBy"]) || !isset($this->dataModel[$tableName]["referencedBy"][$relName]))
+            return null;
+        return $this->dataModel[$tableName]["referencedBy"][$relName];
+    }
+
+    /**
+     * @param $resName
+     * @return bool
+     */
+    public function resource_allow_read ($resName)
+    {
+        return isset($this->dataModel[$resName]["read"])?$this->dataModel[$resName]["read"]:false;
+    }
+
+    /**
+     * @param $resName
+     * @return bool
+     */
+    public function resource_allow_insert ($resName)
+    {
+        return isset($this->dataModel[$resName]["create"])?$this->dataModel[$resName]["create"]:false;
+
+    }
+
+    /**
+     * @param $resName
+     * @return bool
+     */
+    public function resource_allow_update ($resName)
+    {
+        return isset($this->dataModel[$resName]["update"])?$this->dataModel[$resName]["update"]:false;
+    }
+
+    /**
+     * @param $resName
+     * @return bool
+     */
+    public function resource_allow_delete ($resName)
+    {
+        return isset($this->dataModel[$resName]["delete"])?$this->dataModel[$resName]["delete"]:false;
+    }
+
+
 }
 
 function array_key_exists_and_has_value($array,$key,$value) {

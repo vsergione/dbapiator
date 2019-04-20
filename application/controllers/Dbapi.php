@@ -68,13 +68,6 @@ class Dbapi extends CI_Controller
             HttpResp::not_found("API $apiId not found");
         }
 
-        // load permissions
-        // todo: depending on the API client, load the appropriate permissions file
-        $permissions = require($apiConfigDir."/profiles/default.php");
-        if(!isset($permissions)) {
-            HttpResp::server_error("Invalid API permissions");
-        }
-
         // load structure
         $structure = require($apiConfigDir."/structure.php");
         if(!isset($structure)) {
@@ -89,6 +82,21 @@ class Dbapi extends CI_Controller
             HttpResp::server_error("Invalid database config");
         }
 
+        // load permissions
+        // todo: depending on the API client, load the appropriate permissions file
+        $apiKey = $this->input->get("api_key")?$this->input->get("api_key"):$this->input->server("HTTP_X_API_KEY");
+        if(empty($apiKey)) {
+            $profileFIle = "/profiles/default.php";
+        }
+        else {
+            $profileFIle = "/clients/$apiKey.php";
+        }
+
+        /** @noinspection PhpIncludeInspection */
+        $permissions = require($apiConfigDir.$profileFIle);
+        if(!isset($permissions)) {
+            HttpResp::server_error("Invalid API permissions");
+        }
 
         //
         $settings = require($apiConfigDir."/settings.php");
@@ -181,252 +189,132 @@ class Dbapi extends CI_Controller
      * @param string $apiId
      * @param string $resName
      * @param bool $singleRec
-     * @return null
      * TODO add limitation for absolute maximum records to return at a time
+     * @throws Exception
      */
     function fetch_multiple_records($apiId, $resName,$singleRec=false)
     {
         $this->_init($apiId);
 
-        // fetch records
-        try {
-            list($recordSet,$totalRecords) = $this->_get($resName);
-
-            die();
-        }
-        catch (Exception $exception) {
-            HttpResp::exception_out($exception);
-            die();
-        }
-
-
-
-        $null = null;
-
-        if(!$singleRec) {
-            $json = new JSONApiResponse($recordSet,$null,
-                new JSONApiMeta($recordSet->offset, $recordSet->total),
-                new JSONApiLinks(current_url())
-            );
-        }
-        else {
-            $null = null;
-            $data = count($recordSet->records) ? $recordSet->records[0] : null;
-            $json = new JSONApiResponse($data,$null);
-        }
-
-        $json->cleanUp();
-        $cleaned = cleanUpArray((array)$json);
-        HttpResp::json_out(200, $cleaned);
-    }
-
-    function to_jsonapi($recordSet,$total)
-    {
-        $doc = \JSONApi\Document::singleton($recordSet);
-    }
-
-
-    /**
-     * processes a GET requests for /api/$apiId/$resName/$recId
-     * - initializes API Config & DB Connection
-     * - depending on the parameters redirects the
-     * @param $apiId
-     * @param $resName
-     * @param $recId
-     * @param bool $internalCall
-     * @return RecordSet
-     */
-    function fetch_record_by_id($apiId, $resName, $recId,$internalCall=false)
-    {
-        $this->_init($apiId);
-
-        // check if table exists
-        if (!$this->apiDm->is_valid_resource($resName)) {
-            HttpResp::error_out_json("Resource $resName not found",404);
-        }
-
-        // retrieves name of field used as key field
-        $keyFld = $this->apiDm->get_key_fld($resName);
-        if(is_null($keyFld)) {
-            HttpResp::error_out_json("Resource $resName cannot be retrieved by ID",422);
-        }
-
-        // id as filter
-        if($recId)
-            $_GET["filter"] = "$keyFld=$recId";
-
-        // fetch data from DB
-        $recordSet = $this->_get($resName);
-
-        if($internalCall)
-            return $recordSet;
-
-        if($recordSet->total==0) {
-            HttpResp::error_out_json("Resource ID $recId of type $resName not found",404);
-        }
-
-        $null = null;
-        $json = new JSONApiResponse($recordSet,$null, null,
-            new JSONApiLinks(current_url())
-        );
-        $json->cleanUp();
-        if (count($json->data))
-            $json->data = $json->data[0];
-        else
-            $json->data = null;
-        $cleaned = cleanUpArray((array) $json);
-
-        HttpResp::json_out(200, $cleaned);
-    }
-
-
-
-    /**
-     * @param $apiId
-     * @param $resName
-     * @param $recId
-     * @param $fkName
-     */
-    function fetch_fk_record($apiId, $resName, $recId,$fkName) {
-
-
-
-        $this->_init($apiId);
-
-        try {
-            $rel = $this->apiDm->get_fk_relation($resName, $fkName);
-
-            // prepare include
-            $incl = $this->input->get("include");
-            $newIncl = [$fkName];
-            foreach (explode(",",$incl) as $inc) {
-                $newIncl[] .= $rel["table"].".".$incl;
-            }
-            $_GET["include"] = implode(",",$newIncl);
-
-            // prepare fields
-            $flds = $this->input->get("fields");
-
-            $rs = $this->fetch_record_by_id($apiId,$resName,$recId,true);
-            print_r($rs);
-            //echo (json_encode($rs->records[0]->attributes->$fkName,JSON_PRETTY_PRINT));
-        }
-        catch (Exception $exception) {
-            \HttpResp::exception_out($exception);
-        }
-
-        //$res = $this->_get($rel["table"]);
-        //$selectedFields = get_fields($this->input,$tblName);
-
-    }
-
-
-    /**
-     * @param string $tblName
-     * @return array
-     * @throws Exception
-     */
-    private function _get($tblName)
-    {
         // get query parameters
-        //$includes = get_include($this->input);
-        //$selectedFields = get_fields($this->input,$tblName);
-        $filters = get_filters($this->input,$tblName);
+        $include = $this->input->get("include");
+        $fields = $this->input->get("fields");
+        $filters = get_filters($this->input->get("filter"),$resName);
         $offset = get_offset($this->input);
         $pageSize = get_limit($this->input,$this->myConfig["default_result_set_limit"]);
-        $sortBy = get_sort($this->input,$tblName);
-        $relations = get_relations($this->input);
-
-
-
-        /*
-        $options = [
-            "includes"=>get_include($this->input),
-            "fields"=>get_fields($this->input,$tblName),
-            "filter"=>get_filters($this->input,$tblName),
-            "offset"=>get_offset($this->input),
-            "pageSize"=>get_limit($this->input,$this->myConfig["default_result_set_limit"]),
-            "sort"=>get_sort($this->input,$tblName),
-            "relations"=>get_relations($this->input)
-        ];
-        */
-        //print_r($options);
+        $sortBy = get_sort($this->input,$resName);
+        //$relations = get_relations($this->input);
 
         try {
-            list($records,$totalRecords) = $this->recs->get_records($tblName,
-                $this->input->get("include"),
-                $this->input->get("fields"),
-                $filters,
-                $offset,
-                $pageSize,
-                $sortBy
-            );
+            //list($records,$totalRecords);
+            list($records,$totalRecords) = $this->recs->get_records($resName,$include,$fields,$filters,$offset,$pageSize,$sortBy);
 
+            $metaData = new stdClass();
+            $metaData->offset = $offset;
+            $metaData->total = $totalRecords;
+            $doc = \JSONApi\Document::singleton($records,\JSONApi\Meta::factory($metaData));
+
+            HttpResp::json_out(200, $doc->json_data());
         }
         catch (Exception $exception) {
-            throw $exception;
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+        }
+    }
+
+
+
+    /**
+     * @param $apiId
+     * @param $resName
+     * @param $recId
+     */
+    function fetch_record_by_id($apiId,$resName,$recId)
+    {
+        $this->_init($apiId);
+
+        $keyFld = $this->apiDm->get_key_fld($resName);
+        if(is_null($keyFld))
+            HttpResp::json_out(400,"Request not supported. Resource does not have a primary key defined");
+
+        $include = $this->input->get("include");
+        $fields = $this->input->get("fields");
+        $_GET["filter"]= "$keyFld=$recId";
+        $filters = get_filters($this->input->get("filter"),$resName);
+
+        // fetch records
+        try {
+            list($records,$totalRecords) = $this->recs->get_records($resName,$include,$fields,$filters);
+
+            $doc = \JSONApi\Document::singleton($totalRecords?$records[0]:null);
+            //print_r($doc);
+            if($doc->getData()===null)
+                $doc = \JSONApi\Document::not_found("Not found",404);
+            HttpResp::json_out(200, $doc->json_data());
+        }
+        catch (Exception $exception) {
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+        }
+    }
+
+
+    /**
+     * @param $apiId
+     * @param $resourceName
+     * @param $recId
+     * @param $relationName
+     * @throws Exception
+     */
+    function fetch_relationships($apiId, $resourceName, $recId, $relationName)
+    {
+        $this->_init($apiId);
+
+        // detect relation type
+        $relationType = null;
+        if($rel = $this->apiDm->get_inbound_relation($resourceName, $relationName)) {
+            $relationType = "inbound";
+        }
+        else {
+            try {
+                $rel = $this->apiDm->get_outbound_relation($resourceName, $relationName);
+                $relationType = "outbound";
+            }
+            catch (Exception $exception) {
+                $doc = \JSONApi\Document::singleton()
+                    ->addError(\JSONApi\Error::factory(["title" => "Invalid relation $relationName of $resourceName"]));
+                HttpResp::json_out(400, $doc->json_data());
+            }
         }
 
 
-        $metaData = new stdClass();
-        $metaData->offset = $offset;
-        $metaData->total = $totalRecords;
-        $doc = \JSONApi\Document::singleton($records,\JSONApi\Meta::factory($metaData));
-        print_r($doc->json_data());
-        return [$records,$totalRecords];
-        //print_r($records);
-        //exit();
-/*
-        $relationsConfig = [];
-        $initialFilter = @$_GET["filter"];
-*/
-        /**
-         * @var Record $rec
-         */
-//        foreach ($records->records as $rec) {
-//            foreach ($relations as $relationName) {
-//                if(!isset($relationsConfig[$relationName])) {
-//                    $relationsConfig[$relationName] = $this->apiDm->get_relation_config($tblName, $relationName);
-//                }
-//
-//                $rel = $relationsConfig[$relationName];
-//                if($rel) {
-//                    $_GET["include"] = $this->input->get("include") . "," . $rel->targetIdMapFld;
-//                    $_GET["filter"] = $initialFilter.",".$rel->lnkTable.".".$rel->sourceIdMapFld."=".$rec->id;
-//
-//                    $relRecs = $this->recs->get_records(
-//                        $rel->lnkTable,
-//                        get_include($this->input),
-//                        $this->input->get("fields"),
-//                        get_filters($this->input,$tblName),
-//                        0,
-//                        3,
-//                        //$this->config->item("default_result_set_limit"),
-//                        $sortBy
-//                    );
-//
-//
-//                    //$rec->add_relations($relationName,$relRecs->records,$rel->table,$relRecs->offset,$relRecs->total);
-//
-//                    //$rec->add_relation($relationName,$relRec->attributes->$lnkAttrName);
-//                    $relationsRecs = [];
-//                    if(count($relRecs->records)) {
-//                        foreach ($relRecs->records as $relRec) {
-//                            $lnkAttrName =  $rel->targetIdMapFld;
-//                            $rec->add_relation($relationName,$relRec->attributes->$lnkAttrName);
-//                            $relationsRecs[] = $relRec->attributes->$lnkAttrName;
-//                            //print_r($relRec);
-//                        }
-//                    }
-//                    $rec->add_relations($relationName,$relationsRecs,$rel->table,$relRecs->offset,$relRecs->total);
-//                    //exit();
-//
-//                }
-//            }
-//        }
-        //$stop = microtime();
-        /** @var TYPE_NAME $records */
+        // prepare filter for matching the parent records
+        $filterStr = $this->apiDm->get_key_fld($resourceName)."=$recId";
+        $filters = get_filters($filterStr,$resourceName);
+        $parent = null;
+        // fetch parent record
+        try {
+            list($records, $count) = $this->recs->get_records($resourceName, "", "", $filters);
+            if(!$count) {
+                HttpResp::not_found("RecordID $recId of $resourceName not found");
+            }
+            $parent = $records[0];
+            if($relationType=="outbound")
+                $fkId = $parent->attributes->$relationName;
+        }
+        catch (Exception $exception) {
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+        }
+
+        if($relationType=="inbound") {
+            $_GET["filter"] = @$_GET["filter"] . "," . $rel["field"] . "=" . $recId;
+            $this->fetch_multiple_records($apiId, $rel["table"]);
+        }
+        if($relationType=="outbound") {
+            $_GET["filter"] = $rel["field"]."=".$fkId;
+            $this->fetch_record_by_id($apiId,$rel["table"],$fkId);
+        }
+
     }
+
 
     /**
      * method for inserting records in one table at a time. Supports single to multiple.
@@ -439,19 +327,14 @@ class Dbapi extends CI_Controller
     {
         $this->_init($apiId);
 
-        // check if table exists
-        if (!$this->apiDm->is_valid_resource($tableName)) {
-            HttpResp::not_found();
-        }
-
         // POST data validation
         $postData = json_decode($this->input->raw_input_stream);
         try{
             is_valid_post_data($postData);
         }
-        catch (Exception $e) {
+        catch (Exception $exception) {
             // TODO: log validation data, eventualy provide extra validation info....
-            HttpResp::json_out($e->getCode(),["errors"=>[["message"=>$e->getMessage()]]]);
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
         }
 
         // configure onDuplicate behaviour
@@ -463,31 +346,54 @@ class Dbapi extends CI_Controller
         $updateFields = [];
         if($onDuplicate=="update") {
             $updateFields = get_fields_to_update($this->input,$tableName);
-            // if no update fields provided exit with bad request 400
             if(!count($updateFields))
-                HttpResp::bad_request("No fields to be updated have been specified");
+                $onDuplicate = null;
         }
 
+        // starts transaction
+        $this->apiDb->trans_strict(FALSE);
 
-        // configure if inserts should be enclosed in a transaction
-        $transaction = $this->input->get("transaction") && true;
+        // prepare data
+        $entries = is_array($postData->data)?$postData->data:[$postData->data];
 
-        // call internal method to update
-        try {
-            $data = $this->_insert($tableName, $postData, true, $transaction, $onDuplicate, $updateFields);
+        // iterate through data and insert records one by one
+        $insertedRecords = [];
+        $totalRecords = 0;
+        foreach($entries as $entry) {
+            try {
+                // todo: what happens when the records are not uniquely identifiable? think about adding an extra behavior
+                if(!isset($entry->type) || !isset($entry->attributes))
+                    continue;
+
+                $includes = [];
+                $recId = $this->recs->insert($tableName,$entry, true, $onDuplicate, $updateFields,null,$includes);
+
+                $recIdFld = $this->apiDm->get_key_fld($entry->type);
+                $filterStr = "$recIdFld=$recId";
+                $filters = get_filters($filterStr,$tableName);
+
+
+                list($records,$noRecs) = $this->recs->get_records($tableName,implode(",",$includes),"",$filters);
+                $totalRecords += $noRecs;
+                $insertedRecords = array_merge_recursive($insertedRecords,$records);
+                //die();
+
+            }
+            catch (Exception $exception)
+            {
+                $this->apiDb->trans_rollback();
+                HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+            }
         }
-        catch (Exception $e) {
-            HttpResp::json_out($e->getCode(),["errors"=>[["message"=>$e->getMessage()]]]);
-        }
 
-        $meta = null;
-        if(get_class($data)=="RecordSet")
-            $meta =  new JSONApiMeta($data->offset,$data->total);
+        $this->apiDb->trans_commit();
+        //return [$insertedRecords,$totalRecords];
 
-        $null = null;
-        $response = new JSONApiResponse($data,$null,$meta);
-        //$response->cleanUp();
-        HttpResp::json_out(200, $response->toJSON());
+        if(is_object($postData->data))
+            $doc = \JSONApi\Document::singleton($insertedRecords[0])->json_data();
+        else
+            $doc = \JSONApi\Document::singleton($insertedRecords)->json_data();
+        HttpResp::json_out(200, $doc);
     }
 
     /**
@@ -499,17 +405,12 @@ class Dbapi extends CI_Controller
     {
         $this->_init($apiId);
 
-        // check if table exists
-        if (!$this->apiDm->is_valid_resource($tableName)) {
-            HttpResp::not_found();
-        }
-
         try {
             $this->recs->delete($tableName, $recId);
             HttpResp::no_content(204);
         }
-        catch (Exception $e) {
-            HttpResp::json_out($e->getCode(),["errors"=>[["message"=>$e->getMessage()]]]);
+        catch (Exception $exception) {
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
         }
     }
 
@@ -524,7 +425,7 @@ class Dbapi extends CI_Controller
         $this->_init($apiId);
 
         // check if table exists
-        if (!$this->apiDm->is_valid_resource($tableName)) {
+        if (!$this->apiDm->resource_exists($tableName)) {
             HttpResp::not_found();
             exit();
         }
@@ -532,61 +433,56 @@ class Dbapi extends CI_Controller
     }
 
 
-    /**
-     * inserts new records. Always included in a transaction
-     * @param string $tblName
-     * @param mixed $data
-     * @param $recursive
-     * @param $transaction
-     * @param $onDuplicate
-     * @param $updateFields
-     * @return RecordSet
-     * @throws Exception
-     */
-    private function _insert($tblName, $data, $recursive, $transaction, $onDuplicate, $updateFields) {
-        // initializes an empty RecordSet
-        $recordSet = new RecordSet([],$tblName,0,0);
-
-        // starts transaction
-        if($transaction)
-            $this->apiDb->trans_strict(FALSE);
-
-        // determine if is a single or bulk insert
-        $singleInsert = !is_array($data->data);
-
-        // prepare data
-        $entries = is_array($data->data)?$data->data:[$data->data];
-
-        // iterate through data and insert records one by one
-        // - no bulk insert supported
-        foreach($entries as $entry) {
-            try {
-                // todo: what happens when the records are not uniquely identifyable?? think about adding an extra behaviuor
-                $keyFldVal = $this->recs->insert($entry->type, $entry->attributes, $recursive, $onDuplicate, $updateFields);
-                $idFld = $this->apiDm->get_key_fld($entry->type);
-                $_GET["filter"] = "$idFld=$keyFldVal";
-                $records = $this->_get($tblName);
-                if(count($records->records)) {
-                    $recordSet->add_record($tblName,$records->records[0],$this->apiDm->get_key_fld($tblName));
-                }
-            }
-            catch (Exception $e)
-            {
-                if($transaction){
-                    $this->apiDb->trans_rollback();
-                }
-                throw $e;
-            }
-
-        }
-
-
-        $this->apiDb->trans_commit();
-        if($singleInsert)
-            return $recordSet->records[0];
-
-        return $recordSet;
-    }
+//    /**
+//     * inserts new records. Always included in a transaction
+//     * @param string $tblName
+//     * @param mixed $data
+//     * @param $recursive
+//     * @param $onDuplicate
+//     * @param $updateFields
+//     * @return array
+//     * @throws Exception
+//     */
+//    private function _insert($tblName, $data, $recursive, $onDuplicate, $updateFields) {
+//
+//        // starts transaction
+//        $this->apiDb->trans_strict(FALSE);
+//
+//        // prepare data
+//        $entries = is_array($data->data)?$data->data:[$data->data];
+//
+//        // iterate through data and insert records one by one
+//        $newRecs = [];
+//        $totalRecords = 0;
+//        foreach($entries as $entry) {
+//            try {
+//                // todo: what happens when the records are not uniquely identifyable?? think about adding an extra behaviuor
+//                if(!isset($entry->type) || !isset($entry->attributes))
+//                    continue;
+//                $includes = [];
+//                $recId = $this->recs->insert($tblName,$entry, $recursive, $onDuplicate, $updateFields,null,$includes);
+//
+//                $recIdFld = $this->apiDm->get_key_fld($entry->type);
+//                $filterStr = "$recIdFld=$recId";
+//                $filters = get_filters($filterStr,$tblName);
+//
+//
+//                list($records,$noRecs) = $this->recs->get_records($tblName,implode(",",$includes),"",$filters);
+//                $totalRecords += $noRecs;
+//                $newRecs = array_merge_recursive($newRecs,$records);
+//                //die();
+//
+//            }
+//            catch (Exception $e)
+//            {
+//                $this->apiDb->trans_rollback();
+//                throw $e;
+//            }
+//        }
+//
+//        $this->apiDb->trans_commit();
+//        return [$newRecs,$totalRecords];
+//    }
 
 
     function index()

@@ -95,7 +95,7 @@ class Records {
     private function clean_up_fields($fields) {
         // cleanup fields and add id field when not existing
         foreach($fields as $tbl=>$flds) {
-            if(!$this->dm->is_valid_resource($tbl)) {
+            if(!$this->dm->resource_exists($tbl)) {
                 unset($fields[$tbl]);
             }
             else {
@@ -154,309 +154,363 @@ class Records {
 
 
     /**
-     * @param $resName
-     * @param $includes
-     * @param $fields
+     * it parses the includes into a relations tree, where each node contains:
+     * - name: name of the table
+     * - alias: alias for the table
+     * - lnkFld: field which indicated by the parent FK field. To be used in JOIN definition
+     * - fields: table fields (retrieved from DataBase data model which is important to be accurate)
+     * - select: fields to be included in the SELECT part (defaults to *)
+     * - includes: associative array of tables to be joined, where key is an FK field pointing to the related table
+     * - join: FK field of parent to be used in LEFT JOIN...ON expression, in tableAlias.fieldName format
+     * - keyFld: primary key field
+     * - noFlds: number of fields to be included in the result (count(select) when select!=* or count(fields) otherwise
+     * - start: column position in result row where current table begins
+     * -
+     *
+     * @param string $top
+     * @param string $includeStr string of comma separated includes
+     * @param string $fieldsStr string of comma separated field names to include
+     * @return array
+     * @throws \Exception
+     */
+    private function generate_sql_parts($top, $includeStr, $fieldsStr)
+    {
+        // parse & prepare includes
+        $includeStr = trim($includeStr);
+        $includes = $includeStr===""?[]:explode(",",$includeStr);
+
+        sort($includes);
+        for($i=0;$i<count($includes);$i++) {
+            $includes[$i] = explode(".",$includes[$i]);
+        }
+
+        // init relationTree with top element
+        try {
+            $relationTree = [
+                $top => [
+                    "name" => $top,
+                    "alias" => $top,
+                    "fields" => $this->dm->get_selectable_fields($top),
+                    "select" => [],
+                    "includes" => []
+                ]
+            ];
+        }
+        catch (\Exception $exception) {
+            throw new \Exception("Base table is invalid",400,$exception);
+        }
+
+
+        // populate relationTree tree by processing includes
+        foreach ($includes as $include) {
+            $this->process_includes($relationTree[$top],$include);
+        }
+
+
+        // parse & prepare fields as in format path + field name
+        // where path is the way to navigate within the object
+        $fields = explode(",",$fieldsStr);
+        for($i=0;$i<count($fields);$i++) {
+            $fields[$i] = explode(".",trim($fields[$i]));
+            $fld = array_pop($fields[$i]);
+            array_unshift($fields[$i],$top);
+            $tmp = implode(".includes.",$fields[$i]);
+            $fields[$i] = [
+                "path"=>explode(".",$tmp),
+                "field"=>$fld
+            ];
+        }
+
+        // add selected fields
+        foreach ($fields as $field) {
+            try {
+                // identify node indicated by path
+                $table =& $this->find_in_tree($relationTree, $field["path"]);
+                if(in_array($field["field"],$table["fields"])){
+                    $table["select"][] = $field["field"];
+                }
+            }
+            catch (Exception $exception) {
+                //echo "wrong path";
+            }
+            //print_r($res["fields"][$field[""]]);
+        }
+
+        $select = [];
+        $join = [];
+        $this->prepare_query($relationTree[$top],0,$select,$join);
+
+        //print_r($join);
+        $select = implode(", ",array_map(function($sel){
+            return implode(", ",$sel);
+        },$select));
+        $join = implode(" \n",$join);
+        return [$select,$join,$relationTree];
+    }
+
+    /**
+     * generate include tree to be used for generating the SELECT clause
+     *
+     * @param array $parent
+     * @param array $include include path as array, where lower indices are parents of higher ones
+     * @throws \Exception
+     */
+    private function process_includes(&$parent, $include)
+    {
+        // if empty includes return
+        if(!count($include)) {
+            return;
+        }
+
+        // extract current level (first element of the array)
+        $attr = array_shift($include);
+
+        // generate alias
+        $alias = $parent["alias"]."_".$attr;
+
+        // retrieves relation between parent and current level
+        // throws exception. caught lower and ignored
+        try {
+            $rel = $this->dm->get_outbound_relation($parent["name"], $attr);
+        }
+        catch (\Exception $exception) {
+            return;
+        }
+
+        // check if joined resource already there and if not create it
+        if(!array_key_exists($attr,$parent["includes"]) && isset($rel))
+            $parent["includes"][$attr] = [
+                "name"=>$rel["table"],
+                "alias"=>$alias,
+                "lnkFld"=>$rel["field"],
+                "fields"=>$this->dm->get_selectable_fields($rel["table"]),
+                "select"=>[],
+                "includes"=>[],
+                "join"=>$parent["alias"].".".$attr
+            ];
+        $this->process_includes($parent["includes"][$attr],$include);
+    }
+
+    /**
+     * parses
+     * @param $obj
+     * @param $start
+     * @param $select
+     * @param $join
+     * @return int
+     */
+    private function prepare_query(&$obj, $start,&$select,&$join)
+    {
+        try {
+            $id = $this->dm->get_key_fld($obj["name"]);
+        }
+        catch (Exception $exception) {
+            $id = null;
+        }
+
+        $obj["keyFld"] = $id;
+        $obj["start"] = $start;
+
+        if(count($obj["select"])===0) {
+            $obj["select"] = $obj["fields"];
+        }
+
+        $obj["select"][]=$id;
+        $obj["select"] = array_unique($obj["select"]);
+        $obj["noFlds"] = count($obj["select"]);
+
+        // extract ID field position in the fields array
+        $obj["keyFldPos"] = $obj["keyFld"]?array_search($obj["keyFld"],$obj["fields"]):null;
+        $obj["keyFldPos"] = $obj["keyFldPos"]===false?null:$obj["keyFldPos"];
+
+
+        // define currAlias global to be able to refer to it from inside the callback function
+        global $currAlias;
+        $currAlias = $obj["alias"];
+
+        // add alias prefix to field selection using an array_map and an anonymous function as callback
+        $select[] = array_map(function($item){
+            global $currAlias;
+            return $currAlias.".$item";
+        },$obj["select"]);
+
+        // generate LEFT JOIN for joined tables
+        if(isset($obj["join"]))
+            $join[] = sprintf("\nLEFT JOIN %s AS %s ON %s=%s.%s",
+                $obj["name"],$obj["alias"],$obj["join"],$obj["alias"],$obj["lnkFld"]);
+
+        $start += $obj["noFlds"];
+        foreach (array_keys($obj["includes"]) as $key) {
+            $start = $this->prepare_query($obj["includes"][$key],$start,$select,$join);
+        }
+
+        return $start;
+    }
+
+
+    /**
+     * @param array $tree reference to array
+     * @param $path
+     * @return null|array
+     * @throws Exception
+     */
+    private function &find_in_tree(&$tree, $path)
+    {
+        if(count($path)==0)
+            return $tree;
+
+        $c = array_shift($path);
+        if(!isset($tree[$c])) {
+            throw new Exception("Wrong path");
+        }
+        return $this->find_in_tree($tree[$c],$path);
+    }
+
+    /**
+     * @param $node
+     * @param $row
+     * @param $allRecs
+     * @return null|\stdClass
+     */
+    private function parse_result_row($node, $row,&$allRecs)
+    {
+        $id = $row[$node["keyFldPos"]+$node["start"]];
+        $rec = null;
+
+        if($id) {
+            $objIdx = $node["name"] . "_" . $id;
+            if(isset($allRecs[$objIdx])) {
+                $rec = &$allRecs[$objIdx];
+            }
+        }
+
+        if(is_null($rec)){
+            $attributes = new \stdClass();
+            for ($i = 0; $i < $node["noFlds"]; $i++) {
+                $fieldName = $node["fields"][$i];
+                $attributes->$fieldName = $row[$node["start"] + $i];
+            }
+            $rec = new \stdClass();
+            $rec->id = $id;
+            $rec->type = $node["name"];
+            $rec->attributes = $attributes;
+
+            if(isset($objIdx))
+                $allRecs[$objIdx] = $rec;
+        }
+
+        if(!isset($node["includes"]) || count($node["includes"])==0)
+            return $rec;
+
+        foreach($node["includes"] as $fk=>$incNode) {
+
+            if(!is_null($rec->attributes->$fk))
+                $rec->attributes->$fk = $this->parse_result_row($incNode,$row,$allRecs);
+            else {
+                $nullRel = new \stdClass();
+                $nullRel->type = null;
+                $rec->attributes->$fk = $nullRel;
+            }
+        }
+        return $rec;
+    }
+
+    /**
      * @param $filters
+     * @param $resName
+     * @return int|string
+     * @throws \Exception
+     */
+    private function get_where_str($filters,$resName)
+    {
+        $whereArr = [];
+        foreach ($filters as $filter) {
+
+            if ($filter->left->alias == $resName
+                && $this->dm->field_is_searchable($resName, $filter->left->field)) {
+                $whereArr[] = generate_where_str($filter);
+            }
+        }
+        return count($whereArr) ? implode(" AND ", $whereArr) : 1;
+    }
+
+    /**
+     * @param $order
+     * @param $resName
+     * @return string
+     * @throws \Exception
+     */
+    private function get_sort_str($order,$resName)
+    {
+        $orderByArr = [];
+        foreach ($order as $item) {
+            if($item->alias!==$resName)
+                continue;
+            if(!$this->dm->field_is_sortable($item->alias))
+                continue;
+
+            $orderByArr[] = sprintf("%s.%s %s",$resName,$item->fld,$item->dir);
+        }
+        return count($orderByArr)?implode(", ",$orderByArr):1;
+    }
+
+    /**
+     * @param string $resName
+     * @param string $includeStr
+     * @param string $fieldsStr
+     * @param array $filters
      * @param int $offset
      * @param int $limit
      * @param array $order
      * @return array
      * @throws \Exception
      */
-    function get_records($resName, $includes, $fields, $filters, $offset=0, $limit=10, $order=[])
+    function get_records($resName, $includeStr, $fieldsStr, $filters=[], $offset=0, $limit=10, $order=[])
     {
-        if(!$this->dm->is_valid_resource($resName))
-            throw new \Exception("Invalid resource $resName");
+        // check if resource exists (to save time)
+        if(!$this->dm->resource_exists($resName))
+            throw new \Exception("Resource '$resName' not found",404);
 
-        /**
-         * it parses the includes into a relations tree, where each node contains:
-         * - name: name of the table
-         * - alias: alias for the table
-         * - lnkFld: field which indicated by the parent FK field. To be used in JOIN definition
-         * - fields: table fields (retrieved from DataBase data model which is important to be accurate)
-         * - select: fields to be included in the SELECT part (defaults to *)
-         * - includes: associative array of tables to be joined, where key is an FK field pointing to the related table
-         * - join: FK field of parent to be used in LEFT JOIN...ON expression, in tableAlias.fieldName format
-         * - keyFld: primary key field
-         * - noFlds: number of fields to be included in the result (count(select) when select!=* or count(fields) otherwise
-         * - start: column position in result row where current table begins
-         * -
-         *
-         * @param Datamodel $dm
-         * @param $top
-         * @param string $includeStr string of comma separated includes
-         * @param string $fieldsStr string of comma separated field names to include
-         * @return array
-         */
-        function generate_sql_parts(&$dm,$top, $includeStr, $fieldsStr)
-        {
-            // parse & prepare includes
-            $includeStr = trim($includeStr);
-            $includes = $includeStr===""?[]:explode(",",$includeStr);
+        // check if client is authorized
+        if(!$this->dm->resource_allow_read($resName))
+            throw new \Exception("Not authorized to read from '$resName''",401);
 
-            sort($includes);
-            for($i=0;$i<count($includes);$i++) {
-                $includes[$i] = explode(".",$includes[$i]);
-            }
+        $whereStr = $this->get_where_str($filters,$resName);
+        $countSql = "SELECT count(*) as cnt FROM $resName WHERE $whereStr";
 
-            // init relationTree with top element
-            try {
-                $relationTree = [
-                    $top => [
-                        "name" => $top,
-                        "alias" => $top,
-                        "fields" => $dm->get_selectable_fields($top),
-                        "select" => [],
-                        "includes" => []
-                    ]
-                ];
-            }
-            catch (Exception $exception) {
-                throw new Exception("Base table is invalid",400);
-            }
-
-
-            // populate relationTree tree by processing includes
-            foreach ($includes as $include) {
-                process_includes($dm,$relationTree[$top],$include);
-            }
-
-
-            // parse & prepare fields as in format path + field name
-            // where path is the way to navigate within the object
-            $fields = explode(",",$fieldsStr);
-            for($i=0;$i<count($fields);$i++) {
-                $fields[$i] = explode(".",trim($fields[$i]));
-                $fld = array_pop($fields[$i]);
-                array_unshift($fields[$i],$top);
-                $tmp = implode(".includes.",$fields[$i]);
-                $fields[$i] = [
-                    "path"=>explode(".",$tmp),
-                    "field"=>$fld
-                ];
-            }
-
-            // add selected fields
-            foreach ($fields as $field) {
-                try {
-                    // identify node indicated by path
-                    $table =& find_in_tree($relationTree, $field["path"]);
-                    if(in_array($field["field"],$table["fields"])){
-                        $table["select"][] = $field["field"];
-                    }
-                }
-                catch (Exception $exception) {
-                    //echo "wrong path";
-                }
-                //print_r($res["fields"][$field[""]]);
-            }
-
-            $select = [];
-            $join = [];
-            prepare_query($dm,$relationTree[$top],0,$select,$join);
-
-            //print_r($join);
-            $select = implode(", ",array_map(function($sel){
-                return implode(", ",$sel);
-            },$select));
-            $join = implode(" \n",$join);
-            return [$select,$join,$relationTree];
-        }
-
-        /**
-         * parses
-         * @param Datamodel $dm
-         * @param $obj
-         * @param $start
-         * @param $select
-         * @param $join
-         * @return int
-         */
-        function prepare_query(&$dm,&$obj, $start,&$select,&$join)
-        {
-            try {
-                $id = $dm->get_key_fld($obj["name"]);
-            }
-            catch (Exception $exception) {
-                $id = null;
-            }
-
-            $obj["keyFld"] = $id;
-            $obj["start"] = $start;
-
-            if(count($obj["select"])===0) {
-                $obj["select"] = $obj["fields"];
-            }
-
-            $obj["select"][]=$id;
-            $obj["select"] = array_unique($obj["select"]);
-            $obj["noFlds"] = count($obj["select"]);
-
-            // extract ID field position in the fields array
-            $obj["keyFldPos"] = $obj["keyFld"]?array_search($obj["keyFld"],$obj["fields"]):null;
-            $obj["keyFldPos"] = $obj["keyFldPos"]===false?null:$obj["keyFldPos"];
-
-
-            // define currAlias global to be able to refer to it from inside the callback function
-            global $currAlias;
-            $currAlias = $obj["alias"];
-
-            // add alias prefix to field selection using an array_map and an anonymous function as callback
-            $select[] = array_map(function($item){
-                global $currAlias;
-                return $currAlias.".$item";
-            },$obj["select"]);
-
-            // generate LEFT JOIN for joined tables
-            if(isset($obj["join"]))
-                $join[] = sprintf("\nLEFT JOIN %s AS %s ON %s=%s.%s",
-                    $obj["name"],$obj["alias"],$obj["join"],$obj["alias"],$obj["lnkFld"]);
-
-            $start += $obj["noFlds"];
-            foreach (array_keys($obj["includes"]) as $key) {
-                $start = prepare_query($dm,$obj["includes"][$key],$start,$select,$join);
-            }
-
-            return $start;
-        }
-
-        /**
-         * generate include tree to be used for generating the SELECT clause
-         *
-         * @param Datamodel $dm
-         * @param array $parent
-         * @param array $include include path as array, where lower indices are parents of higher ones
-         */
-        function process_includes(&$dm,&$parent, $include)
-        {
-            // if empty includes return
-            if(!count($include)) {
-                return;
-            }
-
-            // extract current level (first element of the array)
-            $attr = array_shift($include);
-
-            // generate alias
-            $alias = $parent["alias"]."_".$attr;
-
-            try {
-                // retrieves relation between parent and current level
-                // throws exception. caught lower and ignored
-                $rel = $dm->get_fk_relation($parent["name"], $attr);
-
-                // check if joined resource already there and if not create it
-                if(!array_key_exists($attr,$parent["includes"]))
-                    $parent["includes"][$attr] = [
-                        "name"=>$rel["table"],
-                        "alias"=>$alias,
-                        "lnkFld"=>$rel["field"],
-                        "fields"=>$dm->get_selectable_fields($rel["table"]),
-                        "select"=>[],
-                        "includes"=>[],
-                        "join"=>$parent["alias"].".".$attr
-                    ];
-                process_includes($dm,$parent["includes"][$attr],$include);
-            }
-            catch (Exception $exception) {
-                echo $exception->getMessage()."\n";
-            }
-        }
-
-        /**
-         * @param array $tree reference to array
-         * @param $path
-         * @return null|array
-         * @throws Exception
-         */
-        function &find_in_tree(&$tree, $path)
-        {
-            if(count($path)==0)
-                return $tree;
-
-            $c = array_shift($path);
-            if(!isset($tree[$c])) {
-                throw new Exception("Wrong path");
-            }
-            return find_in_tree($tree[$c],$path);
-        }
-
-        /**
-         * @param $node
-         * @param $row
-         * @param $allRecs
-         * @return null|\stdClass
-         */
-        function parse_result_row($node, $row,&$allRecs)
-        {
-            $id = $node["keyFld"]?$row[$node["keyFldPos"]]:null;
-            $rec = null;
-
-            if($id) {
-                $objIdx = $node["name"] . "_" . $id;
-                if(isset($allRecs[$objIdx]))
-                    $rec &= $allRecs[$objIdx];
-            }
-
-            if(is_null($rec)){
-                $attributes = new \stdClass();
-                for ($i = 0; $i < $node["noFlds"]; $i++) {
-                    $fieldName = $node["fields"][$i];
-                    $attributes->$fieldName = $row[$node["start"] + $i];
-                }
-                $rec = new \stdClass();
-                $rec->id = $id;
-                $rec->type = $node["name"];
-                $rec->attributes = $attributes;
-
-                if(isset($objIdx))
-                    $allRecs[$objIdx] = $rec;
-            }
-
-            if(!isset($node["includes"]) || count($node["includes"])==0)
-                return $rec;
-
-            foreach($node["includes"] as $fk=>$incNode) {
-                if(!is_null($rec->attributes->$fk))
-                    $rec->attributes->$fk = parse_result_row($incNode,$row,$allRecs);
-            }
-            return $rec;
-        }
-
-        $where = 1;
-
-        $countSql = "SELECT count(*) as cnt FROM $resName WHERE $where";
         $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
 
         $recordSet = [];
         if($totalRecs==0)
             return [$recordSet,0];
 
-        list($select,$join,$relTree) = generate_sql_parts($this->dm,$resName,$includes,$fields);
+        list($select,$join,$relTree) = $this->generate_sql_parts($resName,$includeStr,$fieldsStr);
         //print_r($relTree);
 
-
+        $orderStr = $this->get_sort_str($order,$resName);
         $mainSql = "SELECT $select FROM {$relTree[$resName]["name"]} AS {$relTree[$resName]["alias"]} "
             .($join!==""?$join:"")
-            ." WHERE $where"
+            ." WHERE $whereStr"
+            ." ORDER BY $orderStr"
             ." LIMIT $offset,$limit";
 
-
         /** @var \CI_DB_result $res */
+        //echo $mainSql."\n";
         $res = $this->dbdrv->query($mainSql);
         $rows = $res->result_array_num();
-        //print_r($relTree);
+
         $allRecs = [];
         foreach ($rows as $row) {
-            $newRec = parse_result_row($relTree[$resName],$row,$allRecs);
+            $newRec = $this->parse_result_row($relTree[$resName],$row,$allRecs);
 
             $recordSet[] = $newRec;
         }
+        // print_r($recordSet);
 
         return [$recordSet,$totalRecs];
 
     }
+
     /**
      * @param string $resName
      * @param array $includes
@@ -466,6 +520,7 @@ class Records {
      * @param int $limit
      * @param array $order
      * @return \RecordSet
+     * @throws \Exception
      */
     function get_records_old($resName, $includes, $fields, $filters, $offset=0, $limit=10, $order=[]) {
         //echo "get records";
@@ -488,7 +543,7 @@ class Records {
         foreach ($includes as $include) {
             // get relation
             try {
-                $rel = $this->dm->get_fk_relation($resName, $include);
+                $rel = $this->dm->get_outbound_relation($resName, $include);
             }
             catch (\Exception $exception) {
                 $rel = null;
@@ -559,12 +614,12 @@ class Records {
         $whereArr = [];
         foreach ($filters as $filter) {
             if($filter->left->alias==$resName
-                && $this->dm->is_searchable_field($resName,$filter->left->field)) {
+                && $this->dm->field_is_searchable($resName,$filter->left->field)) {
                 $whereArr[] = generate_where_str($filter);
 
             }
             elseif(isset($joinArr[$filter->left->alias])
-                && $this->dm->is_searchable_field($joinArr[$filter->left->alias]["table"],$filter->left->field)) {
+                && $this->dm->field_is_searchable($joinArr[$filter->left->alias]["table"],$filter->left->field)) {
                 $filter->left->alias = $joinArr[$filter->left->alias]["alias"];
                 $whereArr[] = generate_where_str($filter);
             }
@@ -636,95 +691,156 @@ class Records {
      * TODO: clarify best approach about what to return after inserting OK....
      *
      *
-     * @param string $table name of table where data will be inserted
+     * @param $table
      * @param object $data data to be inserted
      * @param bool $recursive allow recursive insert
      * @param string $onDuplicate behaviour flags
-     * @param String[] $toUpdateFields
+     * @param String[] $fieldsToUpdate
+     * @param $path
+     * @param $includes
      * @return \Response
      * @throws \Exception
      */
-    function insert($table, $data, $recursive, $onDuplicate, $toUpdateFields) {
-        // validate attributes
-        $attributes = $this->dm->validate_object_attributes($table,$data,"ins");
+    function insert($table, $data, $recursive, $onDuplicate, $fieldsToUpdate, $path, &$includes) {
+        //$table = $data->type;
+        if($data->type!=$table)
+            throw new \Exception("Invalid data type '$table'",400);
 
+        // check if resource exists
+        if(!$this->dm->resource_exists($table))
+            throw new \Exception("Resource '$table'' not found",404);
+
+        // check if client is authorized to insert into resource
+        if(!$this->dm->resource_allow_insert($table))
+            throw new \Exception("Not authorized to insert into resource '$table'",401);
+
+
+
+        // validate attributes
+        $attributes = $data->attributes;
+        $relations = isset($data->relationships)?$data->relationships:[];
         $idFld = $this->dm->get_key_fld($table);
 
-        // call recursive create for embedded records
-        foreach($attributes as $fldName=>$value) {
-            if(is_object($value) && $recursive) {
-                // insert first embeded objects
-                try{
-                    is_valid_post_data($value);
-                }
-                catch (\Exception $e) {
-                    throw $e;
-                }
+        $insertData = [];
+        if(isset($data->id)) {
+            $insertData[$idFld] = $data->id;
+        }
 
-                $value = $value->data;
-                try {
-                    $recId = $this->insert($value->type, $value->attributes, $recursive, $onDuplicate, $toUpdateFields);
-                    $attributes->$fldName = $recId;
-                }
-                catch (\Exception $e)  {
-                    throw $e;
-                }
+
+        // collect attributes
+        foreach($attributes as $fldName=>$value) {
+            if(!$this->dm->field_is_insertable($table,$fldName))
+                throw new \Exception("Not allowed to insert data in field '$fldName' of table '$table'",400);
+            $insertData[$fldName] = $value;
+        }
+
+        $one2nRelations = [];
+        // iterate relations and insert recursive if it is the case
+        foreach ($relations as $relName=>$relData) {
+            if(!isset($relData->data)) {
+                throw new \Exception("Invalid relationship '$relName' data: invalid format",400);
+            }
+            if(!is_object($relData)) {
+                throw new \Exception("Invalid relationship '$relName' data: invalid format ",400);
+            }
+            // inbound relation (1:n) add to stack for later insert
+            if(is_array($relData->data)) {
+                $one2nRelations[$relName] = $relData->data;
+                continue;
+            }
+
+            if(!$this->dm->is_valid_field($table,$relName))
+                throw new \Exception("Invalid 1:1 relation '$relName' for '$table'",400);
+
+            if(!isset($relData->data->type))
+                throw new \Exception("Invalid relationship data: missing '$relName' type",400);
+
+            $fk = (object)$this->dm->get_outbound_relation($table,$relName);
+            //$relData = (object)$relData;
+            if($fk->table!==$relData->data->type)
+                throw new \Exception("Invalid relationship data: invalid type for relationship '$relName'",400);
+            $newPath = $path==null?$relName:$path.".$relName";
+            if(isset($relData->data->id)) {
+                if(!in_array($newPath,$includes))
+                    $includes[] = $newPath;
+                $insertData[$relName] = $relData->data->id;
+                continue;
+            }
+            if(isset($relData->data->attributes)) {
+                $insertData[$relName] = $this->insert($fk->table,$relData->data,$recursive,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
+                if(!in_array($newPath,$includes))
+                    $includes[] = $newPath;
             }
         }
 
+        $insertData = $this->dm->validate_object_attributes($table,$insertData,"ins");
 
         // print_r($attributes);
-        $insSql = $this->dbdrv->insert_string($table,$attributes);
+        $insSql = $this->dbdrv->insert_string($table,$insertData);
 
         // configure behaviour to update fields when
-        if($onDuplicate=="update") {
-            $updStr = [];
-            if (!empty($toUpdateFields[$table])) {
-                foreach ($toUpdateFields[$table] as $fld) {
-                    if ($this->dm->is_field_updateable($table, $fld) && isset($attributes->$fld)) {
-                        $updStr[] = "$fld=VALUES($fld)";
+        // valid for MySQL
+        // todo: should put this in an external file
+        switch ($onDuplicate) {
+            case "update":
+                if (empty($fieldsToUpdate[$table]))
+                    break;
+
+                $updStr = [];
+                foreach ($fieldsToUpdate[$table] as $fld) {
+                    if (!$this->dm->field_is_updateable($table, $fld)) {
+                        throw new \Exception("ON DUPLICATE UPDATE failure: not allowed to update field '$fld'", 400);
                     }
+                    $updStr[] = "$fld=VALUES($fld)";
                 }
-            }
-            if(count($updStr))
-                $insSql .= " ON DUPLICATE KEY UPDATE " . implode(",", $updStr);
-            else
-                throw new \Exception("Invalid fields to be updated",400);
+
+                if(count($updStr))
+                    $insSql .= " ON DUPLICATE KEY UPDATE " . implode(",", $updStr);
+                break;
+            case "ignore":
+                if($idFld)
+                    $insSql .= " ON DUPLICATE KEY UPDATE $idFld=$idFld";
+                break;
         }
 
-        if($onDuplicate=="ignore") {
-            if($idFld)
-                $insSql .= " ON DUPLICATE KEY UPDATE $idFld=$idFld";
+
+        // insert data in DB
+        if(!$this->dbdrv->query($insSql)) {
+            log_message("error","$insSql");
+            throw new \Exception($this->dbdrv->error()["message"], 500);
         }
 
-
-        if(!$this->dbdrv->query($insSql))
-            throw new \Exception($this->dbdrv->error()["message"],500);
-
-
+        // retrieve resource ID (mysql specific)
+        // todo: evaluate impact for other DB engines and implement
         $insId = $this->dbdrv->insert_id();
+        if(!$insId && $this->dbdrv->affected_rows() && $idFld)
+            $insId = $insertData[$idFld];
+
         if($insId)
             return $insId;
 
-        $this->dbdrv->where((array) $attributes);
-        $selSql = $this->dbdrv->get_compiled_select($table);
+        $selSql = $this->dbdrv
+                    ->where($insertData)
+                    ->get_compiled_select($table);
+
         /**
          * @var \CI_DB_result
          */
         $q = $this->dbdrv->query($selSql);
+        $cnt = $q->num_rows();
 
-        if($q->num_rows()>1) {
-            log_message("debug","More then one records returned on Insert new record: $insSql / $selSql");
+        if($cnt>1) {
+            log_message("error","More then one records returned on Insert new record: $insSql / $selSql");
             throw new \Exception("More then one records returned",500);
         }
 
-        if($q->num_rows()==0) {
+        if($cnt==0) {
+            log_message("error","Insert did not failed, but no records where returned...: $insSql / $selSql");
             throw new \Exception("Server error. Contact administrator.",500);
         }
 
         $newRecId = $q->row()->$idFld;
         return $newRecId;
-
     }
 
 
@@ -779,11 +895,12 @@ class Records {
      * @throws \Exception
      */
     function delete($tableName, $recId) {
-        /**
-         * TODO same check should be used in OPTIONS response
-         */
-        if(!$this->dm->delete_allowed($tableName))
-            throw new \Exception("Delete not allowed on table $tableName",400);
+        // check if resource exists
+        if(!$this->dm->resource_exists($tableName))
+            throw new \Exception("Resource '$tableName' not found",404);
+
+        if(!$this->dm->resource_allow_delete($tableName))
+            throw new \Exception("Not authorized to delete from $tableName",401);
 
         $idFld = $this->dm->get_key_fld($tableName);
 
@@ -792,18 +909,9 @@ class Records {
         if($this->dbdrv->affected_rows()) {
             return true;
         }
-        throw new \Exception("Not found",404);
+        throw new \Exception("Record not found",404);
     }
 
-    /**
-     * validates if object is valid
-     * @param $data
-     * @return bool
-     * @todo to implemet check on controller side => delete from here
-     */
-    private function is_valid_resource($data) {
-        return property_exists($data,"type") && property_exists($data,"id");
-    }
 
     /**
      * create relationship (new)
@@ -813,37 +921,37 @@ class Records {
      * @param $data
      * @return bool
      */
-    function create_relationships($srcTbl,$srcId,$relation,$data) {
-        if(!is_array($data))
-            $data = array($data);
-        try {
-            $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
-
-            $this->dm->get_rel_target_tbl($srcTbl,$relation);
-            $insData = array();
-            foreach($data as $item) {
-                $insData[] = array($srcTbl."_id"=>$srcId,$item->type."_id"=>$item->id);
-            }
-
-            //$this->db->db_debug = FALSE;
-            $this->dbdrv->trans_start();
-            $this->dbdrv->insert_batch($lnkTbl,$insData);
-            $this->dbdrv->trans_complete();
-            $this->dbdrv->db_debug = TRUE;
-            if ($this->dbdrv->trans_status() === FALSE) {
-                $this->dbdrv->trans_rollback();
-                throw new \Exception("Insert failed",500);
-            }
-            else {
-                $this->dbdrv->trans_commit();
-                return true;
-            }
-
-        }
-        catch(\Exception $e) {
-            throw new $e;
-        }
-    }
+//    function create_relationships($srcTbl,$srcId,$relation,$data) {
+//        if(!is_array($data))
+//            $data = array($data);
+//        try {
+//            $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
+//
+//            $this->dm->get_rel_target_tbl($srcTbl,$relation);
+//            $insData = array();
+//            foreach($data as $item) {
+//                $insData[] = array($srcTbl."_id"=>$srcId,$item->type."_id"=>$item->id);
+//            }
+//
+//            //$this->db->db_debug = FALSE;
+//            $this->dbdrv->trans_start();
+//            $this->dbdrv->insert_batch($lnkTbl,$insData);
+//            $this->dbdrv->trans_complete();
+//            $this->dbdrv->db_debug = TRUE;
+//            if ($this->dbdrv->trans_status() === FALSE) {
+//                $this->dbdrv->trans_rollback();
+//                throw new \Exception("Insert failed",500);
+//            }
+//            else {
+//                $this->dbdrv->trans_commit();
+//                return true;
+//            }
+//
+//        }
+//        catch(\Exception $e) {
+//            throw new $e;
+//        }
+//    }
 
 
     /**
@@ -857,63 +965,63 @@ class Records {
      *
      * @todo Review code
      */
-    function update_relationships($srcTbl,$srcId,$relation,$data) {
-        if(!$this->dm->is_valid_resource($srcTbl))
-            return \Response::make(false,404,"Invalid table $srcTbl");
-
-        if(!$this->dm->is_valid_relation($srcTbl,$relation))
-            return \Response::make(false,404,"Invalid relation $relation");
-
-        $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
-        $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
-        if($this->dm->get_rel_type($srcTbl,$relation)=="1:1")
-            if(is_object($data))
-                if($data==null)
-                    $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
-                else
-                    if($this->is_valid_resource($data))
-                        if($data->type==$tgtTbl) {
-                            $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
-                            $this->dbdrv->insert($lnkTbl,array($srcTbl."_id"=>$srcId,$tgtTbl."_id"=>$data->id));
-                            return \Response::make(true,204);
-                        }
-                        else
-                            return \Response::make(false,400,"Invalid relation data type");
-                    else
-                        return \Response::make(false,404,"Invalid relation data");
-            else
-                return \Response::make(false,400,"Invalid relation data");
-        elseif($this->dm->get_rel_type($srcTbl,$relation)=="1:n")
-            if(is_array($data))
-                if(count($data)==0)
-                    $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
-                else {
-                    $insData = array();
-                    $dataSize = count($data);
-                    foreach($data as $idx=>$item)
-                        if($this->is_valid_resource($item))
-                            if($item->type==$tgtTbl)
-                                $insData[] = array($srcTbl."_id"=>$srcId,$tgtTbl."_id"=>$item->id);
-                            else
-                                unset($data[$idx]);
-                        else
-                            unset($data[$idx]);
-                    if(count($insData)) {
-                        $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
-                        $this->dbdrv->insert($lnkTbl,$insData);
-                        if(count($data)!=$dataSize)
-                            return \Response::make(true,200,$data);
-                        else
-                            return \Response::make(true,204);
-                    }
-                }
-            else
-                return \Response::make(false,400,"Invalid relation data");
-        else
-            return \Response::make(false,500,"Invalid relation config on server side");
-
-        return \Response::make(false,500,"Invalid relation config on server side");
-    }
+//    function update_relationships($srcTbl,$srcId,$relation,$data) {
+//        if(!$this->dm->resource_is_valid($srcTbl))
+//            return \Response::make(false,404,"Invalid table $srcTbl");
+//
+//        if(!$this->dm->is_valid_relation($srcTbl,$relation))
+//            return \Response::make(false,404,"Invalid relation $relation");
+//
+//        $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
+//        $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
+//        if($this->dm->get_relation_type($srcTbl,$relation)=="1:1")
+//            if(is_object($data))
+//                if($data==null)
+//                    $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
+//                else
+//                    if($this->resource_is_valid($data))
+//                        if($data->type==$tgtTbl) {
+//                            $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
+//                            $this->dbdrv->insert($lnkTbl,array($srcTbl."_id"=>$srcId,$tgtTbl."_id"=>$data->id));
+//                            return \Response::make(true,204);
+//                        }
+//                        else
+//                            return \Response::make(false,400,"Invalid relation data type");
+//                    else
+//                        return \Response::make(false,404,"Invalid relation data");
+//            else
+//                return \Response::make(false,400,"Invalid relation data");
+//        elseif($this->dm->get_relation_type($srcTbl,$relation)=="1:n")
+//            if(is_array($data))
+//                if(count($data)==0)
+//                    $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
+//                else {
+//                    $insData = array();
+//                    $dataSize = count($data);
+//                    foreach($data as $idx=>$item)
+//                        if($this->resource_is_valid($item))
+//                            if($item->type==$tgtTbl)
+//                                $insData[] = array($srcTbl."_id"=>$srcId,$tgtTbl."_id"=>$item->id);
+//                            else
+//                                unset($data[$idx]);
+//                        else
+//                            unset($data[$idx]);
+//                    if(count($insData)) {
+//                        $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
+//                        $this->dbdrv->insert($lnkTbl,$insData);
+//                        if(count($data)!=$dataSize)
+//                            return \Response::make(true,200,$data);
+//                        else
+//                            return \Response::make(true,204);
+//                    }
+//                }
+//            else
+//                return \Response::make(false,400,"Invalid relation data");
+//        else
+//            return \Response::make(false,500,"Invalid relation config on server side");
+//
+//        return \Response::make(false,500,"Invalid relation config on server side");
+//    }
 
     /**
      * delete relationships
@@ -924,51 +1032,51 @@ class Records {
      * @param array|object $data relation data
      * @return \Response
      */
-    function delete_relationship($srcTbl,$srcId,$relation,$data) {
-
-        if(!$this->dm->is_valid_resource($srcTbl))
-            return \Response::make(false,404,"Invalid table $srcTbl");
-
-        if(!$this->dm->is_valid_relation($srcTbl,$relation))
-            return \Response::make(false,404,"Invalid relation $relation");
-
-        $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
-        $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
-
-        switch($this->dm->get_rel_type($srcTbl,$relation)) {
-            case "1:1":
-                if(is_object($data))
-                    if(property_exists($data,"type") && property_exists($data,"id"))
-                        if($data->type==$tgtTbl)
-                            $deleteWhere = "{$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$data->id'";
-                        else
-                            return \Response::make(false,400,"Invalid input data");
-                    else
-                        return \Response::make(false,400,"Invalid input data");
-                else
-                    return \Response::make(false,400,"Invalid input data");
-                $this->dbdrv->where($deleteWhere)->delete($lnkTbl);
-                break;
-            case "1:n":
-                $deleteWhere = array();
-                if(is_array($data))
-                    foreach($data as $idx=>$item)
-                        if(property_exists($item,"type") && property_exists($item,"id"))
-                            if($item->type==$tgtTbl)
-                                $deleteWhere[] = "({$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$item->id')";
-                            else
-                                return \Response::make(false,400,"Invalid input data");
-                        else
-                            return \Response::make(false,400,"Invalid input data");
-                else
-                    return \Response::make(false,400,"Invalid input data");
-
-                $this->dbdrv->where(implode(" OR ",$deleteWhere))->delete($lnkTbl);
-                break;
-            default:
-                return \Response::make(false,500,"Invalid config");
-        }
-
-        return \Response::make(true,204);
-    }
+//    function delete_relationship($srcTbl,$srcId,$relation,$data) {
+//
+//        if(!$this->dm->resource_is_valid($srcTbl))
+//            return \Response::make(false,404,"Invalid table $srcTbl");
+//
+//        if(!$this->dm->is_valid_relation($srcTbl,$relation))
+//            return \Response::make(false,404,"Invalid relation $relation");
+//
+//        $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
+//        $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
+//
+//        switch($this->dm->get_relation_type($srcTbl,$relation)) {
+//            case "1:1":
+//                if(is_object($data))
+//                    if(property_exists($data,"type") && property_exists($data,"id"))
+//                        if($data->type==$tgtTbl)
+//                            $deleteWhere = "{$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$data->id'";
+//                        else
+//                            return \Response::make(false,400,"Invalid input data");
+//                    else
+//                        return \Response::make(false,400,"Invalid input data");
+//                else
+//                    return \Response::make(false,400,"Invalid input data");
+//                $this->dbdrv->where($deleteWhere)->delete($lnkTbl);
+//                break;
+//            case "1:n":
+//                $deleteWhere = array();
+//                if(is_array($data))
+//                    foreach($data as $idx=>$item)
+//                        if(property_exists($item,"type") && property_exists($item,"id"))
+//                            if($item->type==$tgtTbl)
+//                                $deleteWhere[] = "({$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$item->id')";
+//                            else
+//                                return \Response::make(false,400,"Invalid input data");
+//                        else
+//                            return \Response::make(false,400,"Invalid input data");
+//                else
+//                    return \Response::make(false,400,"Invalid input data");
+//
+//                $this->dbdrv->where(implode(" OR ",$deleteWhere))->delete($lnkTbl);
+//                break;
+//            default:
+//                return \Response::make(false,500,"Invalid config");
+//        }
+//
+//        return \Response::make(true,204);
+//    }
 }

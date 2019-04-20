@@ -55,7 +55,7 @@ function generate_where_str($where) {
         return "TRUE";
     }
 
-    if($where->right=="") return "TRUE";
+    //if($where->right=="") return "TRUE";
 
     $validOps = ["!=","=","<","<=",">",">=","><","~=","!~=","=~","!=~","<>","!><"];
 
@@ -207,28 +207,27 @@ function get_updatefields($input,$defaultTable) {
 
 /**
  * extracts filters from GET
- * @param CI_Input $input
+ * @param $rawFilterStr
  * @param string $defaultTable
  * @return array
  */
-function get_filters($input,$defaultTable)
+function get_filters($rawFilterStr,$defaultTable)
 {
     $filters = [];
-    if(empty($input->get("filter")))
-        return $filters;
-
     // split string by comma and process each segment
-    foreach(explode(",",$input->get("filter")) as $idx=>$item) {
+    foreach(explode(",",$rawFilterStr) as $idx=>$item) {
         $where = null;
         // regexp search to identify
         preg_match("/([\w\-\$]+)(\.([\w\-\$]+))?(\!?[\=\<\>\~]+)(.*)/",$item,$m);
 
+
         if(!empty($m)) {
             $alias = empty($m[3])?$defaultTable:$m[1];
-            $filters[] = (object) [
+            $fieldName = empty($m[3])?$m[1]:$m[3];
+            $filters[$alias.".".$fieldName] = (object) [
                 "left"=>(object) [
                     "alias"=>$alias,
-                    "field"=>empty($m[3])?$m[1]:$m[3]
+                    "field"=>$fieldName
                 ],
                 "op"=>$m[4],
                 "right"=>$m[5]
@@ -305,6 +304,11 @@ function get_relations($input)
 }
 
 
+/**
+ * @param $input
+ * @param $defaultTableName
+ * @return array
+ */
 function get_fields_to_update($input,$defaultTableName)
 {
     $updateFields = [];
@@ -364,6 +368,11 @@ function is_valid_post_data($data,$def=null) {
         throw new Exception("Input data must be object or array",400);
     if(!property_exists($data,"data"))
         throw new Exception("data property missing",400);
+
+    if(!in_array(gettype($data),["array","object"])) {
+        echo gettype($data);
+        throw new Exception("Invalid data. Must be array or object", 400);
+    }
 
     $entries = !is_array($data->data)?[$data->data]:$data->data;
     

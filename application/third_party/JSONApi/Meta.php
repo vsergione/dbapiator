@@ -11,12 +11,18 @@ namespace JSONApi;
 
 class Meta extends json_ready
 {
-    static function factory()
+
+    static function factory($data)
     {
-        return new self();
+        if(is_object($data) || is_array($data))
+            return new self($data);
+        throw new \Exception("Invalid Meta ".json_encode($data),500);
     }
-    private function __construct ()
+    private function __construct ($data)
     {
+        foreach ($data as $key=>$val) {
+            $this->$key = $val;
+        }
     }
 
 }

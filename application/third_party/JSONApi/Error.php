@@ -14,36 +14,46 @@ class Error extends json_ready
     /**
      * @var string
      */
-    private $title;
+    protected $title;
     /**
      * @var Links
      */
-    private $links;
+    protected $links;
     /**
      * @var string
      */
-    private $status;
+    protected $status;
     /**
      * @var string
      */
-    private $code;
+    protected $code;
     /**
      * @var string
      */
-    private $detail;
+    protected $detail;
     /**
      * @var Meta
      */
-    private $meta;
+    protected $meta;
 
-    static function factory()
+    /**
+     * @param $data
+     * @return Error
+     */
+    static function factory($data)
     {
-        return new self();
-    }
-    private function __construct ()
-    {
+        if(is_array($data) || is_object($data))
+            return new self($data);
+        return null;
     }
 
+    private function __construct ($data)
+    {
+        foreach ($data as $key=>$val) {
+            if(property_exists(__CLASS__,$key))
+                $this->$key = $val;
+        }
+    }
 
     /**
      * @return mixed

@@ -59,6 +59,12 @@ class Resource extends json_ready
 
     }
 
+    /**
+     * Resource constructor.
+     * @param $type
+     * @param $id
+     * @param $attributes
+     */
     private function __construct ($type,$id,$attributes)
     {
         $this->id = $id;
@@ -69,12 +75,26 @@ class Resource extends json_ready
 
         foreach ($rels as $relationName=>$relationData) {
             // add to includes
-            $includedResource = $doc->addInclude(Resource::factory($relationData->type,$relationData->id,Attributes::factory($relationData->attributes)));
             if(!$this->relationships)
                 $this->relationships = Relationships::factory();
 
+            if($relationData->type==null) {
+                $this->relationships->addRelation($relationName, null);
+                continue;
+            }
+
+            $includedResource = $doc->addInclude(
+                Resource::factory(
+                    $relationData->type,
+                    $relationData->id,
+                    Attributes::factory(
+                        $relationData->attributes)));
+
+
+
             $relation = Relationship::factory($includedResource);
-            $this->relationships->addRelation($relationName,$relation);
+            if($relation)
+                $this->relationships->addRelation($relationName,$relation);
         }
     }
 

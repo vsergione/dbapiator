@@ -16,11 +16,10 @@ class Relationship extends json_ready
     private $type;
 
     /**
-     * @param txt|array $data
+     * @param Resource|array $data
      * @param null $links
      * @param null $meta
-     * @return Relationship
-     * @throws \Exception
+     * @return Relationship|null
      */
     static function factory($data, $links=null, $meta=null)
     {
@@ -31,7 +30,7 @@ class Relationship extends json_ready
             $type = "1:n";
         }
         if(!isset($type))
-            throw new \Exception("Invalid data type");
+            return null;
 
         return new self($type,$data,$links,$meta);
     }
@@ -59,14 +58,13 @@ class Relationship extends json_ready
     }
 
     /**
-     * @param mixed $data
+     * @param object|array $data
      * @return Relationship
-     * @throws \Exception
      */
     public function &setData ($data)
     {
         if(!in_array(gettype($data),["object","array"]))
-            throw new \Exception("Invalid Resource used as relationship");
+            return $this;
 
         switch ($this->type) {
             case "1:1":
@@ -79,8 +77,8 @@ class Relationship extends json_ready
                 $this->data = [];
                 foreach ($data as $item) {
                     $newObj = new \stdClass();
-                    $newObj->id = $data->getId();
-                    $newObj->type = $data->getType();
+                    $newObj->id = $item->getId();
+                    $newObj->type = $item->getType();
                     $this->data[] = $newObj;
                 }
                 break;

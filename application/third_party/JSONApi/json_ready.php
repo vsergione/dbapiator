@@ -25,8 +25,15 @@ abstract class json_ready
                 case "array":
                     $ret[$lbl] = [];
                     foreach ($val as $key=>$item) {
-                        $ret[$lbl][]  = $item->json_data();
+                        if (method_exists($item, "json_data")) {
+                            $ret[$lbl][] = $item->json_data();
+                        }
+                        else {
+                            $ret[$lbl][] = $item;
+                        }
                     }
+
+
                     break;
                 default:
                     if(!is_null($val))
