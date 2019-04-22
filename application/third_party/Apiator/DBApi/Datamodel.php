@@ -268,7 +268,7 @@ class Datamodel {
     function get_key_flds($tableName) {
         $keys = [];
         foreach($this->dataModel[$tableName]["fields"] as $fldName=> $fldSpec)
-            if($fldSpec->iskey)
+            if($fldSpec["iskey"])
                 $keys[] = $fldName;
 
         return $keys;
@@ -567,6 +567,9 @@ class Datamodel {
 
         if(!$this->resource_exists($resName))
             throw new \Exception("table '$resName' not found",400);
+
+        if(is_object($attributes))
+            $attributes = (array) $attributes;
         //if(!isset($data->attributes)) throw new
 
         $attributesNames = array_keys($attributes);
@@ -643,8 +646,10 @@ class Datamodel {
      */
     public function get_inbound_relation ($tableName,$relName)
     {
+        //echo "$tableName $relName";
         if(!isset($this->dataModel[$tableName]["referencedBy"]) || !isset($this->dataModel[$tableName]["referencedBy"][$relName]))
             return null;
+
         return $this->dataModel[$tableName]["referencedBy"][$relName];
     }
 
@@ -683,6 +688,33 @@ class Datamodel {
     public function resource_allow_delete ($resName)
     {
         return isset($this->dataModel[$resName]["delete"])?$this->dataModel[$resName]["delete"]:false;
+    }
+
+    /**
+     * @param $resName
+     * @return array
+     */
+    public function get_fk_fields ($resName)
+    {
+        $fks = [];
+        foreach ($this->dataModel[$resName]["fields"] as $fieldName=>$fieldSpec) {
+            if(isset($fieldSpec["foreignKey"]))
+                $fks[$fieldName] = $fieldSpec["foreignKey"];
+        }
+
+        return $fks;
+    }
+
+    /**
+     * @param $tableName
+     * @return null
+     */
+    public function get_inbound_relations ($tableName)
+    {
+        if(!isset($this->dataModel[$tableName]["referencedBy"])) {
+            return [];
+        }
+        return $this->dataModel[$tableName]["referencedBy"];
     }
 
 

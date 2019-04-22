@@ -355,54 +355,54 @@ function cleanUpArray($arr) {
     return $arr;
 }
 
-
 /**
  * validates $data as a JSON API document
  * @param $data
- * @param null $def
- * @return Response
+ * @param array $requiredAttributes
  * @throws Exception
  */
-function is_valid_post_data($data,$def=null) {
+function validate_post_data($data, $requiredAttributes=[]) {
     if(!is_object($data))
-        throw new Exception("Input data must be object or array",400);
+        throw new Exception("Invalid top level data: not an object",400);
     if(!property_exists($data,"data"))
-        throw new Exception("data property missing",400);
+        throw new Exception("Invalid input object: missing 'data' property",400);
 
     if(!in_array(gettype($data),["array","object"])) {
-        echo gettype($data);
         throw new Exception("Invalid data. Must be array or object", 400);
     }
 
     $entries = !is_array($data->data)?[$data->data]:$data->data;
+
+    if($requiredAttributes!==[])
+        foreach($entries as $entry) {
+            is_valid_post_data_entry($entry,$requiredAttributes);
+        }
     
-    foreach($entries as $entry) {
-        $res = is_valid_post_data_entry($entry,$def);
-        if($res->code!==200)
-            return $res;
-    }
-    
-    return $data;
+
 }
 
 /**
  * validates if $entry is a valid entry structure inside an JSONApi object
  * does not valid contents against the prototype
  * @param object $entry
- * @param object $def
- * @return Response
+ * @param array $requiredAttributes
+ * @throws Exception
  */
-function is_valid_post_data_entry($entry,$def) {
+function is_valid_post_data_entry($entry,$requiredAttributes=[]) {
     if(!is_object($entry))
-        return Response::make(false,400,"data entry not an object");
-    if(!property_exists($entry,"type"))
-        return Response::make(false,400,"entry object missing type property");
-        
-    if(!property_exists($entry,"attributes")) 
-        $entry->attributes = new stdClass();
-    if(!is_object($entry->attributes))
-        return Response::make(false,400,"entry object attributes property must be an object");
-    return Response::make(true,200,$entry);
+        throw new Exception("Data entry not an object",400);
+
+    foreach ($requiredAttributes as $attr=>$attrType) {
+        if(!isset($entry->$attr))
+            throw new Exception("Resource object missing '$attr' property",400);
+
+        if(!is_null($attrType) && !in_array(gettype($entry->$attr),$attrType)) {
+            //echo "..".gettype($entry->$attr)."--".implode(",",$attrType)."--";
+            throw new Exception("Resource object attribute '$attr' is not a valid '" .
+                implode(", ", $attrType) . "", 400);
+        }
+
+    }
 }
 
 /**

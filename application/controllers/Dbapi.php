@@ -157,29 +157,147 @@ class Dbapi extends CI_Controller
         }
     }
 
-    /**
-     * @param string $apiName
-     * @param string $tblName
-     * @param string $recId
-     */
-    function update($apiName, $tblName, $recId)
+    function update_bulk($apiId,$resourceName)
     {
-        echo "updateRecord";
-        print_r(func_get_args());
+        $this->_init($apiId);
+        $postData = json_decode($this->input->raw_input_stream);
+        try{
+            //validate_post_data($postData,["id"=>null,"type"=>["string"],"attributes"=>["object"]]);
+            validate_post_data($postData);
+        }
+        catch (Exception $exception) {
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+        }
+
+        if(gettype($postData->data)!=="array") {
+            $exception = new Exception("Invalid data attribute type: must be an array",400);
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+        }
+        $maxBulkUpdateRecords = $this->config->item("bulk_update_limit");
+
+        $ids = [];
+        $exceptions = [];
+        foreach ($postData->data as $idx=>$item) {
+            if(!isset($item->id)) {
+                $exceptions[] = new Exception("Failed to update record number $idx: no id attribute provided", 400);
+                continue;
+            }
+
+            try {
+                $ids[] = $this->update($apiId, $resourceName, $item->id, $item);
+            }
+            catch (Exception $e) {
+                $exceptions[] = new Exception("Failed to update record number $idx: ".$e->getMessage(),$e->getCode());
+            }
+
+            $maxBulkUpdateRecords--;
+            if($maxBulkUpdateRecords==0) {
+                $exceptions[] = new Exception("Maximum number of records to bulk update reached: "
+                    .$this->config->item("bulk_update_limit"), 400);
+            }
+
+        }
+        $doc = \JSONApi\Document::singleton([]);
+        if(count($ids)) {
+            $filterStr = $this->apiDm->get_key_fld($resourceName)."><".implode(";",$ids);
+            $filter = get_filters($filterStr,$resourceName);
+            $recs = $this->recs->get_records($resourceName,null,null, $filter);
+            $doc = \JSONApi\Document::singleton($recs[0]);
+        }
+        if(count($exceptions)) {
+            foreach ($exceptions as $exception) {
+                $doc->addError(\JSONApi\Error::from_exception($exception));
+            }
+        }
+        //print_r($doc);
+        HttpResp::jsonapi_out(200,$doc);
+
     }
 
     /**
-     * @param string $apiName
-     * @param string $tblName
+     * update one record
+     * @param string $apiId
+     * @param string $resourceName
      * @param string $recId
+     * @param null $updateData
+     * @return Exception|string
+     * @throws Exception
      */
-    function delete($apiName, $tblName, $recId=null)
+    function update($apiId, $resourceName, $recId, $updateData=null)
     {
-        if(!$recId)
-            echo "deleteRecords";
-        else
-            echo "deleteRecord";
-        print_r(func_get_args());
+        $this->_init($apiId);
+        $internal = true;
+
+        // POST data validation
+        if(is_null($updateData)) {
+            $postData = json_decode($this->input->raw_input_stream);
+
+            try {
+                validate_post_data($postData);
+            } catch (Exception $exception) {
+                HttpResp::jsonapi_out($exception->getCode(), \JSONApi\Document::from_exception($exception));
+
+            }
+            $updateData = $postData->data;
+            $internal = false;
+        }
+
+        if(gettype($updateData)!=="object") {
+            $exception = new Exception("Invalid data attribute type: must be an object",400);
+            if($internal)
+                throw $exception;
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+        }
+
+        // validate if data type is same as the end point type
+        if($resourceName!==$updateData->type) {
+            $exception = new Exception("Object type mismatch; '$updateData->type' instead of '$resourceName' ",400);
+            if($internal)
+                throw $exception;
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+        }
+
+        // validate if record ID from input matches the one from URL
+        if($recId!==$updateData->id) {
+            $exception = new Exception("Record ID mismatch",400);
+            if($internal)
+                throw $exception;
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+        }
+
+        // check if resource has primary key
+        $resKeyFld = $this->apiDm->get_key_fld($resourceName);
+        if(!$resKeyFld) {
+            $exception = new Exception("Cannot update by id: resource is not configured with a primary key",400);
+            if($internal)
+                throw $exception;
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+        }
+
+        // check if record exists
+        $filters = get_filters("$resKeyFld=$recId",$resourceName);
+        list($recs,$total) = $this->recs->get_records($resourceName,null,null,$filters);
+        if(!$total) {
+            $exception = new Exception("Record not $recId of type '$resourceName' not found",404);
+            if($internal)
+                throw $exception;
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+        }
+
+        // perform update
+        try {
+            $recId = $this->recs->update_by_id($resourceName, $recId, $updateData);
+            if($internal)
+                return $recId;
+            $this->fetch_record_by_id($apiId,$resourceName,$recId);
+        }
+        catch (Exception $exception) {
+            if($internal)
+                throw $exception;
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+        }
+
+
     }
 
 
@@ -208,6 +326,7 @@ class Dbapi extends CI_Controller
         try {
             //list($records,$totalRecords);
             list($records,$totalRecords) = $this->recs->get_records($resName,$include,$fields,$filters,$offset,$pageSize,$sortBy);
+            //print_r($records);
 
             $metaData = new stdClass();
             $metaData->offset = $offset;
@@ -244,12 +363,16 @@ class Dbapi extends CI_Controller
         // fetch records
         try {
             list($records,$totalRecords) = $this->recs->get_records($resName,$include,$fields,$filters);
+            print_r($records);
 
-            $doc = \JSONApi\Document::singleton($totalRecords?$records[0]:null);
-            //print_r($doc);
-            if($doc->getData()===null)
+            if(!$totalRecords) {
                 $doc = \JSONApi\Document::not_found("Not found",404);
-            HttpResp::json_out(200, $doc->json_data());
+                HttpResp::json_out(200, $doc->json_data());
+            }
+            //print_r($records);
+            //$resource = \JSONApi\Resource::factory()
+            $doc = \JSONApi\Document::singleton($records[0])->json_data();
+            HttpResp::json_out(200,$doc);
         }
         catch (Exception $exception) {
             HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
@@ -330,11 +453,12 @@ class Dbapi extends CI_Controller
         // POST data validation
         $postData = json_decode($this->input->raw_input_stream);
         try{
-            is_valid_post_data($postData);
+            validate_post_data($postData);
         }
         catch (Exception $exception) {
             // TODO: log validation data, eventualy provide extra validation info....
-            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+
         }
 
         // configure onDuplicate behaviour
@@ -389,11 +513,16 @@ class Dbapi extends CI_Controller
         $this->apiDb->trans_commit();
         //return [$insertedRecords,$totalRecords];
 
-        if(is_object($postData->data))
-            $doc = \JSONApi\Document::singleton($insertedRecords[0])->json_data();
-        else
-            $doc = \JSONApi\Document::singleton($insertedRecords)->json_data();
-        HttpResp::json_out(200, $doc);
+        if($totalRecords) {
+            if (is_object($postData->data))
+                $doc = \JSONApi\Document::singleton($insertedRecords[0])->json_data();
+            else
+                $doc = \JSONApi\Document::singleton($insertedRecords)->json_data();
+            HttpResp::json_out(200, $doc);
+        }
+        $err = \JSONApi\Error::factory(["code"=>400,"title"=>"No records inserted due to invalid input data"]);
+        HttpResp::jsonapi_out(400,\JSONApi\Document::error_doc($err));
+
     }
 
     /**
@@ -432,57 +561,6 @@ class Dbapi extends CI_Controller
 
     }
 
-
-//    /**
-//     * inserts new records. Always included in a transaction
-//     * @param string $tblName
-//     * @param mixed $data
-//     * @param $recursive
-//     * @param $onDuplicate
-//     * @param $updateFields
-//     * @return array
-//     * @throws Exception
-//     */
-//    private function _insert($tblName, $data, $recursive, $onDuplicate, $updateFields) {
-//
-//        // starts transaction
-//        $this->apiDb->trans_strict(FALSE);
-//
-//        // prepare data
-//        $entries = is_array($data->data)?$data->data:[$data->data];
-//
-//        // iterate through data and insert records one by one
-//        $newRecs = [];
-//        $totalRecords = 0;
-//        foreach($entries as $entry) {
-//            try {
-//                // todo: what happens when the records are not uniquely identifyable?? think about adding an extra behaviuor
-//                if(!isset($entry->type) || !isset($entry->attributes))
-//                    continue;
-//                $includes = [];
-//                $recId = $this->recs->insert($tblName,$entry, $recursive, $onDuplicate, $updateFields,null,$includes);
-//
-//                $recIdFld = $this->apiDm->get_key_fld($entry->type);
-//                $filterStr = "$recIdFld=$recId";
-//                $filters = get_filters($filterStr,$tblName);
-//
-//
-//                list($records,$noRecs) = $this->recs->get_records($tblName,implode(",",$includes),"",$filters);
-//                $totalRecords += $noRecs;
-//                $newRecs = array_merge_recursive($newRecs,$records);
-//                //die();
-//
-//            }
-//            catch (Exception $e)
-//            {
-//                $this->apiDb->trans_rollback();
-//                throw $e;
-//            }
-//        }
-//
-//        $this->apiDb->trans_commit();
-//        return [$newRecs,$totalRecords];
-//    }
 
 
     function index()

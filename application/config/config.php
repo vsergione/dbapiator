@@ -2,9 +2,10 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 
 $config["allApisDir"] = "/var/www/domains/apiator/apiator_data/___apis";
-
-
 $config['base_url'] = 'https://dbapi.apiator/';
+
+$config['bulk_update_limit'] = 3;
+$config['max_inbound_recordset_size'] = 10;
 
 $config['index_page'] = '';
 $config['uri_protocol']	= 'REQUEST_URI'; // [REQUEST_URI | QUERY_STRING | PATH_INFO]

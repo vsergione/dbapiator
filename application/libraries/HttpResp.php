@@ -288,6 +288,16 @@ class HttpResp{
         HttpResp::ctype_out($code,"application/json",$body,$headers);
     }
 
+    /**
+     * @param $code
+     * @param \JSONApi\Document $doc
+     */
+    static function jsonapi_out($code,$doc)
+    {
+        $body = json_encode($doc->json_data(),JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        HttpResp::ctype_out($code,"application/json",$body);
+    }
+
     static function error_out_json($message,$code)
     {
         HttpResp::json_out($code,[

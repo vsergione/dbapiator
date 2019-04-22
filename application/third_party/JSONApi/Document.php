@@ -49,10 +49,9 @@ class Document extends  json_ready
      */
     static function singleton($data=null, Meta $meta=null, array $errors=null, Links $links=null, array $includes=null)
     {
-        if(isset(self::$doc))
-            return self::$doc;
+        if(!isset(self::$doc))
+            self::$doc = new self();
 
-        self::$doc = new self();
         self::$doc->setData($data);
         if($meta)
             self::$doc->setMeta($meta);
@@ -92,7 +91,7 @@ class Document extends  json_ready
         function parseRecursive(&$errors,$exception) {
             $errors[] = Error::factory(
                     [
-                    "message"=>$exception->getMessage(),
+                    "title"=>$exception->getMessage(),
                     "code"=>$exception->getCode()
                 ]);
             if($lnk=$exception->getPrevious())

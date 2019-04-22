@@ -47,6 +47,15 @@ class Error extends json_ready
         return null;
     }
 
+    /**
+     * @param \Exception $e
+     * @return Error
+     */
+    static function from_exception($e)
+    {
+        return new self(["title"=>$e->getMessage(),"code"=>$e->getCode()]);
+    }
+
     private function __construct ($data)
     {
         foreach ($data as $key=>$val) {

@@ -31,6 +31,7 @@ class Records {
      * @var \CI_DB_query_builder
      */
     private $dbdrv;
+    private $maxNoRels;
 
     /**
      * Records constructor.
@@ -40,6 +41,7 @@ class Records {
     function __construct($dbDriver,$dataModel) {
         $this->dm = $dataModel;
         $this->dbdrv = $dbDriver;
+        $this->maxNoRels = get_instance()->config->item("max_inbound_recordset_size");
     }
 
     static function init($dbDriver,$dataModel) {
@@ -86,34 +88,6 @@ class Records {
         return $orderByArr;
     }
 
-    /**
-     * prepare fields for SELECT clause
-     *
-     * @param array $fields reference of fields array
-     * @return array
-     */
-    private function clean_up_fields($fields) {
-        // cleanup fields and add id field when not existing
-        foreach($fields as $tbl=>$flds) {
-            if(!$this->dm->resource_exists($tbl)) {
-                unset($fields[$tbl]);
-            }
-            else {
-                if(!empty($flds)) {
-                    $fields[$tbl] = array();
-                    foreach($flds as $fld) {
-                        if($this->dm->is_valid_field($tbl,$fld)) {
-                            $fields[$tbl][] = $fld;
-                        }
-                    }
-                    if(count($fields[$tbl]) && !in_array("id",$flds)) {
-                        array_push($fields[$tbl],"id");
-                    }
-                }
-            }
-        }
-        return $fields;
-    }
 
     /**
      * extract ids from records in RecordSet
@@ -125,32 +99,14 @@ class Records {
         $tmp = is_array($data)?$data: [$data];
         $ids = [];
         foreach($tmp as $rec) {
-            if(property_exists($rec,"id"))
-                array_push($ids,$rec->id);
+            if(property_exists($rec,"id")) {
+                $idFld = $this->dm->get_key_fld($rec->type);
+                array_push($ids,$rec->$idFld);
+            }
         }
         return $ids;
     }
 
-
-    /**
-     * @param $resName
-     * @param $recId
-     * @param $fkName
-     * @param $includes
-     * @param $fields
-     * @param $filters
-     * @param $offset
-     * @param $limit
-     * @param $order
-     * @return \RecordSet
-     * @throws \Exception
-     */
-//    function get_fk_record($resName,$recId,$fkName,$includes,$fields,$filters,$offset,$limit,$order)
-//    {
-//        // todo: remove??
-//
-//        return $this->get_records($rel["table"],$includes,$fields,$filters,$offset,$limit,$order);
-//    }
 
 
     /**
@@ -191,13 +147,15 @@ class Records {
                     "name" => $top,
                     "alias" => $top,
                     "fields" => $this->dm->get_selectable_fields($top),
+                    "fks"=>$this->dm->get_fk_fields($top),
                     "select" => [],
-                    "includes" => []
+                    "includes" => [],
+                    "inbound" => $this->dm->get_inbound_relations($top)
                 ]
             ];
         }
         catch (\Exception $exception) {
-            throw new \Exception("Base table is invalid",400,$exception);
+            throw new \Exception("Base table $top is invalid",400,$exception);
         }
 
 
@@ -263,32 +221,48 @@ class Records {
         }
 
         // extract current level (first element of the array)
-        $attr = array_shift($include);
+        $relName = array_shift($include);
 
         // generate alias
-        $alias = $parent["alias"]."_".$attr;
+        $alias = $parent["alias"]."_".$relName;
 
         // retrieves relation between parent and current level
         // throws exception. caught lower and ignored
         try {
-            $rel = $this->dm->get_outbound_relation($parent["name"], $attr);
+            $fkRel = $this->dm->get_outbound_relation($parent["name"], $relName);
+
+            // check if joined resource already there and if not create it
+            if(!array_key_exists($relName,$parent["includes"]))
+                $parent["includes"][$relName] = [
+                    "name" => $fkRel["table"],
+                    "alias" => $alias,
+                    "lnkFld" => $fkRel["field"],
+                    "fields" => $this->dm->get_selectable_fields($fkRel["table"]),
+                    "fks" => $this->dm->get_fk_fields($fkRel["table"]),
+                    "inbound" => $this->dm->get_inbound_relations($fkRel["table"]),
+                    "select" => [],
+                    "includes" => [],
+                    "join" => $parent["alias"].".".$relName,
+                    "type" => "1:1",
+                    "parent"=>&$parent
+                ];
+
+            $this->process_includes($parent["includes"][$relName],$include);
         }
         catch (\Exception $exception) {
-            return;
         }
 
-        // check if joined resource already there and if not create it
-        if(!array_key_exists($attr,$parent["includes"]) && isset($rel))
-            $parent["includes"][$attr] = [
-                "name"=>$rel["table"],
-                "alias"=>$alias,
-                "lnkFld"=>$rel["field"],
-                "fields"=>$this->dm->get_selectable_fields($rel["table"]),
-                "select"=>[],
-                "includes"=>[],
-                "join"=>$parent["alias"].".".$attr
-            ];
-        $this->process_includes($parent["includes"][$attr],$include);
+        if($inboundRel = $this->dm->get_inbound_relation($parent["name"], $relName)) {
+            if(!array_key_exists($relName,$parent["includes"])) {
+                $parent["includes"][$relName] = [
+                        "type"=>"1:n",
+                        "table"=>$inboundRel["table"],
+                        "field"=>$inboundRel["field"],
+                        "parent"=>&$parent
+                    ];
+            }
+        }
+
     }
 
     /**
@@ -341,7 +315,8 @@ class Records {
 
         $start += $obj["noFlds"];
         foreach (array_keys($obj["includes"]) as $key) {
-            $start = $this->prepare_query($obj["includes"][$key],$start,$select,$join);
+            if($obj["includes"][$key]["type"]=="1:1")
+                $start = $this->prepare_query($obj["includes"][$key],$start,$select,$join);
         }
 
         return $start;
@@ -386,14 +361,35 @@ class Records {
 
         if(is_null($rec)){
             $attributes = new \stdClass();
+            $relationships = [];
             for ($i = 0; $i < $node["noFlds"]; $i++) {
                 $fieldName = $node["fields"][$i];
-                $attributes->$fieldName = $row[$node["start"] + $i];
+                if(isset($node["fks"][$fieldName])) {
+                    $relationships[$fieldName] = new \stdClass();
+                    $relationships[$fieldName]->type = $node["fks"][$fieldName]["table"];
+                    $relationships[$fieldName]->id = $row[$node["start"] + $i];
+                }
+                else {
+                    $attributes->$fieldName = $row[$node["start"] + $i];
+                }
             }
+
             $rec = new \stdClass();
             $rec->id = $id;
             $rec->type = $node["name"];
             $rec->attributes = $attributes;
+
+            if(count($relationships))
+                $rec->relationships = (object) $relationships;
+            elseif(count($node["inbound"]))
+                $rec->relationships = new \stdClass();
+
+            // add inbound
+            foreach ($node["inbound"] as $label=>$spec) {
+                $rec->relationships->$label = [];
+                //if(isset($node["includes"$label)
+            }
+
 
             if(isset($objIdx))
                 $allRecs[$objIdx] = $rec;
@@ -402,14 +398,22 @@ class Records {
         if(!isset($node["includes"]) || count($node["includes"])==0)
             return $rec;
 
-        foreach($node["includes"] as $fk=>$incNode) {
 
-            if(!is_null($rec->attributes->$fk))
-                $rec->attributes->$fk = $this->parse_result_row($incNode,$row,$allRecs);
-            else {
-                $nullRel = new \stdClass();
-                $nullRel->type = null;
-                $rec->attributes->$fk = $nullRel;
+        foreach($node["includes"] as $fk=>$incNode) {
+            if(!isset($rec->relationships->$fk))
+                continue;
+            if(is_null($rec->relationships->$fk))
+                continue;
+            if($incNode["type"]=="1:1") {
+                $rec->relationships->$fk = $this->parse_result_row($incNode, $row, $allRecs);
+            }
+            if($incNode["type"]=="1:n") {
+                $filtrStr = $incNode["field"]."=".$rec->id;
+                $filtr = get_filters($filtrStr,$incNode["table"]);
+                list($recsss,$total) = $this->get_records($incNode["table"],null,null,$filtr,0,$this->maxNoRels);
+                //print_r($incNode["table"]."--".$filtrStr);
+                //print_r($recsss);
+                $rec->relationships->$fk = $recsss;
             }
         }
         return $rec;
@@ -502,7 +506,6 @@ class Records {
         $allRecs = [];
         foreach ($rows as $row) {
             $newRec = $this->parse_result_row($relTree[$resName],$row,$allRecs);
-
             $recordSet[] = $newRec;
         }
         // print_r($recordSet);
@@ -848,29 +851,35 @@ class Records {
      * update Record
      * @param $table
      * @param $id
-     * @param $attributes
-     * @return \Response
+     * @param $resource
+     * @return string
      * @throws \Exception
      */
-    function update($table, $id, $attributes) {
-        $validation = $this->dm->validate_object_attributes($table,$attributes,"upd");
-        if(!$validation->success)
-            return $validation;
-        $attributes = $validation->data;
+    function update_by_id($table, $id, $resource) {
+        try {
+            $resource->attributes = $this->dm->validate_object_attributes($table, $resource->attributes, "upd");
+        }
+        catch (\Exception $exception) {
+            throw new \Exception("Could not update record due to data validation failure.",400,$exception);
+        }
+        $priKey = $this->dm->get_key_fld($table);
+        if(!$priKey)
+            throw new \Exception("Update by ID not allowed: table '$table' does not have primary key.",500);
 
         // get key flds of table
         $keyFlds = $this->dm->get_key_flds($table);
 
+
         // validate uniq recs
         $whereArr = array();
-        foreach($attributes as $name=>$value) {
+        foreach($resource->attributes as $name=>$value) {
             if(in_array($name,$keyFlds)) {
                 $whereArr[] = "$name='$value'";
             }
         }
 
         if(count($whereArr)) {
-            $sql = "SELECT * FROM $table WHERE id!='$id' AND (".implode(" OR ",$whereArr).")";
+            $sql = "SELECT * FROM $table WHERE $priKey!='$id' AND (".implode(" OR ",$whereArr).")";
 
             $q = $this->dbdrv->query($sql);
             if($q->num_rows()) {
@@ -880,8 +889,11 @@ class Records {
 
 
         $this->dbdrv->where($this->dm->get_key_fld($table),$id);
-        $this->dbdrv->update($table,$attributes);
-        return $this->dbdrv->affected_rows();
+        $this->dbdrv->update($table,$resource->attributes);
+        if(isset($resource->attributes[$priKey]))
+            return $resource->attributes[$priKey];
+        return $resource->id;
+
     }
 
 
@@ -912,171 +924,4 @@ class Records {
         throw new \Exception("Record not found",404);
     }
 
-
-    /**
-     * create relationship (new)
-     * @param $srcTbl
-     * @param $srcId
-     * @param $relation
-     * @param $data
-     * @return bool
-     */
-//    function create_relationships($srcTbl,$srcId,$relation,$data) {
-//        if(!is_array($data))
-//            $data = array($data);
-//        try {
-//            $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
-//
-//            $this->dm->get_rel_target_tbl($srcTbl,$relation);
-//            $insData = array();
-//            foreach($data as $item) {
-//                $insData[] = array($srcTbl."_id"=>$srcId,$item->type."_id"=>$item->id);
-//            }
-//
-//            //$this->db->db_debug = FALSE;
-//            $this->dbdrv->trans_start();
-//            $this->dbdrv->insert_batch($lnkTbl,$insData);
-//            $this->dbdrv->trans_complete();
-//            $this->dbdrv->db_debug = TRUE;
-//            if ($this->dbdrv->trans_status() === FALSE) {
-//                $this->dbdrv->trans_rollback();
-//                throw new \Exception("Insert failed",500);
-//            }
-//            else {
-//                $this->dbdrv->trans_commit();
-//                return true;
-//            }
-//
-//        }
-//        catch(\Exception $e) {
-//            throw new $e;
-//        }
-//    }
-
-
-    /**
-     * updates relationships
-     *
-     * @param string $srcTbl source table name
-     * @param string $srcId id of source Record
-     * @param string $relation relationship name
-     * @param mixed $data relation data
-     * @return \Response
-     *
-     * @todo Review code
-     */
-//    function update_relationships($srcTbl,$srcId,$relation,$data) {
-//        if(!$this->dm->resource_is_valid($srcTbl))
-//            return \Response::make(false,404,"Invalid table $srcTbl");
-//
-//        if(!$this->dm->is_valid_relation($srcTbl,$relation))
-//            return \Response::make(false,404,"Invalid relation $relation");
-//
-//        $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
-//        $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
-//        if($this->dm->get_relation_type($srcTbl,$relation)=="1:1")
-//            if(is_object($data))
-//                if($data==null)
-//                    $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
-//                else
-//                    if($this->resource_is_valid($data))
-//                        if($data->type==$tgtTbl) {
-//                            $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
-//                            $this->dbdrv->insert($lnkTbl,array($srcTbl."_id"=>$srcId,$tgtTbl."_id"=>$data->id));
-//                            return \Response::make(true,204);
-//                        }
-//                        else
-//                            return \Response::make(false,400,"Invalid relation data type");
-//                    else
-//                        return \Response::make(false,404,"Invalid relation data");
-//            else
-//                return \Response::make(false,400,"Invalid relation data");
-//        elseif($this->dm->get_relation_type($srcTbl,$relation)=="1:n")
-//            if(is_array($data))
-//                if(count($data)==0)
-//                    $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
-//                else {
-//                    $insData = array();
-//                    $dataSize = count($data);
-//                    foreach($data as $idx=>$item)
-//                        if($this->resource_is_valid($item))
-//                            if($item->type==$tgtTbl)
-//                                $insData[] = array($srcTbl."_id"=>$srcId,$tgtTbl."_id"=>$item->id);
-//                            else
-//                                unset($data[$idx]);
-//                        else
-//                            unset($data[$idx]);
-//                    if(count($insData)) {
-//                        $this->dbdrv->delete($lnkTbl,array($srcTbl."_id"=>$srcId));
-//                        $this->dbdrv->insert($lnkTbl,$insData);
-//                        if(count($data)!=$dataSize)
-//                            return \Response::make(true,200,$data);
-//                        else
-//                            return \Response::make(true,204);
-//                    }
-//                }
-//            else
-//                return \Response::make(false,400,"Invalid relation data");
-//        else
-//            return \Response::make(false,500,"Invalid relation config on server side");
-//
-//        return \Response::make(false,500,"Invalid relation config on server side");
-//    }
-
-    /**
-     * delete relationships
-     *
-     * @param string $srcTbl source table name
-     * @param string $srcId id of source Record
-     * @param string $relation relationship name
-     * @param array|object $data relation data
-     * @return \Response
-     */
-//    function delete_relationship($srcTbl,$srcId,$relation,$data) {
-//
-//        if(!$this->dm->resource_is_valid($srcTbl))
-//            return \Response::make(false,404,"Invalid table $srcTbl");
-//
-//        if(!$this->dm->is_valid_relation($srcTbl,$relation))
-//            return \Response::make(false,404,"Invalid relation $relation");
-//
-//        $lnkTbl = $this->dm->get_rel_link_tlb($srcTbl,$relation);
-//        $tgtTbl = $this->dm->get_rel_target_tbl($srcTbl,$relation);
-//
-//        switch($this->dm->get_relation_type($srcTbl,$relation)) {
-//            case "1:1":
-//                if(is_object($data))
-//                    if(property_exists($data,"type") && property_exists($data,"id"))
-//                        if($data->type==$tgtTbl)
-//                            $deleteWhere = "{$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$data->id'";
-//                        else
-//                            return \Response::make(false,400,"Invalid input data");
-//                    else
-//                        return \Response::make(false,400,"Invalid input data");
-//                else
-//                    return \Response::make(false,400,"Invalid input data");
-//                $this->dbdrv->where($deleteWhere)->delete($lnkTbl);
-//                break;
-//            case "1:n":
-//                $deleteWhere = array();
-//                if(is_array($data))
-//                    foreach($data as $idx=>$item)
-//                        if(property_exists($item,"type") && property_exists($item,"id"))
-//                            if($item->type==$tgtTbl)
-//                                $deleteWhere[] = "({$srcTbl}_id='$srcId' AND {$tgtTbl}_id='$item->id')";
-//                            else
-//                                return \Response::make(false,400,"Invalid input data");
-//                        else
-//                            return \Response::make(false,400,"Invalid input data");
-//                else
-//                    return \Response::make(false,400,"Invalid input data");
-//
-//                $this->dbdrv->where(implode(" OR ",$deleteWhere))->delete($lnkTbl);
-//                break;
-//            default:
-//                return \Response::make(false,500,"Invalid config");
-//        }
-//
-//        return \Response::make(true,204);
-//    }
 }
