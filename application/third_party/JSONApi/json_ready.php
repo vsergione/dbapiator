@@ -17,8 +17,10 @@ abstract class json_ready
         foreach ($this as $lbl=>$val) {
             switch (gettype($val)) {
                 case "object":
-                    if(method_exists($val,"json_data"))
+                    if(method_exists($val,"json_data")) {
+
                         $ret[$lbl] = $val->json_data();
+                    }
                     else
                         $ret[$lbl] = $val;
                     break;

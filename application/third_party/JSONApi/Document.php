@@ -14,7 +14,9 @@ namespace JSONApi;
 class Document extends  json_ready
 {
 
+    protected $apiBaseUrl;
     protected static $doc;
+    protected $baseUrl = "https://dbapi.apiator/api/5cbaed2eb9a51";
 
     protected $data;
     /**
@@ -44,14 +46,16 @@ class Document extends  json_ready
      * @param Meta|null $meta
      * @param array|null $errors
      * @param Links|null $links
-     * @param array|null $includes
      * @return Document
+     * @throws \Exception
      */
-    static function singleton($data=null, Meta $meta=null, array $errors=null, Links $links=null, array $includes=null)
+    static function singleton($data=null, Meta $meta=null, array $errors=null, Links $links=null)
     {
-        if(!isset(self::$doc))
-            self::$doc = new self();
 
+        if(isset(self::$doc))
+            return self::$doc;
+
+        self::$doc = new self();
         self::$doc->setData($data);
         if($meta)
             self::$doc->setMeta($meta);
@@ -59,8 +63,6 @@ class Document extends  json_ready
             self::$doc->setErrors($errors);
         if($links)
             self::$doc->setLinks($links);
-        if($includes)
-            self::$doc->setIncludes($includes);
 
         return self::$doc;
     }
@@ -113,6 +115,10 @@ class Document extends  json_ready
 
     }
 
+    public function get_baseUrl()
+    {
+        return $this->baseUrl;
+    }
     /**
      * @return mixed
      */
@@ -124,43 +130,31 @@ class Document extends  json_ready
     /**
      * @param mixed $data
      * @return Document
+     * @throws \Exception
      */
     public function &setData ($data)
     {
-
         if(is_null($data)) {
             $this->data = null;
             return $this;
         }
 
-        switch(gettype($data)) {
-            case "object":
-                $attrs = Attributes::factory($data->attributes);
-                $this->data = Resource::factory($data->type, $data->id, $attrs);
-                break;
-            case "array":
-
-                $this->data = [];
-                foreach ($data as $item) {
-                    if(is_object($item)) {
-                        $attrs = Attributes::factory($item->attributes);
-                        $this->data[] = Resource::factory($item->type, $item->id, $attrs);
-                    }
-
+        if(is_object($data)) {
+            $this->data = Resource::factory($data);
+        }
+        elseif(is_array($data)) {
+            $this->data = [];
+            foreach ($data as $item) {
+                $newRes = Resource::factory($item);
+                if($newRes) {
+                    $this->data[] = $newRes;
                 }
-                break;
+            }
         }
 
         return $this;
     }
 
-    /**
-     * @return mixed
-     */
-    public function getErrors ()
-    {
-        return $this->errors;
-    }
 
     /**
      * @param mixed $errors
@@ -172,13 +166,6 @@ class Document extends  json_ready
         return $this;
     }
 
-    /**
-     * @return mixed
-     */
-    public function getMeta ()
-    {
-        return $this->meta;
-    }
 
     /**
      * @param Meta|null $meta
@@ -191,14 +178,6 @@ class Document extends  json_ready
     }
 
     /**
-     * @return mixed
-     */
-    public function getJsonapi ()
-    {
-        return $this->jsonapi;
-    }
-
-    /**
      * @param mixed $jsonapi
      * @return Document
      */
@@ -208,47 +187,27 @@ class Document extends  json_ready
         return $this;
     }
 
-    /**
-     * @return mixed
-     */
-    public function getIncludes ()
-    {
-        return array_values($this->includes);
-    }
-
-    /**
-     * @param mixed $includes
-     * @return Document
-     */
-    public function &setIncluded (array $includes)
-    {
-        /**
-         * @var Resource $resource
-         */
-        foreach ($includes as $resource) {
-            $this->includes[$resource->getType()."_".$resource->getId()] = $resource;
-        }
-        return $this;
-    }
 
     /**
      * @param Resource $resource
-     * @return Resource|Resource
+     * @return Resource|null
+     * @throws \Exception
      */
-    function &addInclude(Resource $resource)
+    function addInclude($resource)
     {
-        $this->includes[$resource->getType()."_".$resource->getId()] = $resource;
-        return $resource;
+        if(!($resource instanceof Resource))
+            throw new \Exception("Invalid parameter: not a Resource object");
+
+        if(!isset($this->includes))
+            $this->includes = [];
+
+        $uid = $resource->getType()."_".$resource->getId();
+        if(!isset($this->includes[$uid]))
+            $this->includes[$uid] = $resource;
+
+        return $this->includes[$uid];
     }
 
-
-    /**
-     * @return mixed
-     */
-    public function getLinks ()
-    {
-        return $this->links;
-    }
 
     /**
      * @param mixed $links
@@ -267,6 +226,7 @@ class Document extends  json_ready
     {
 
         $data = parent::json_data(); // TODO: Change the autogenerated stub
+        unset($data["baseUrl"]);
         if(!isset($data["errors"]) && !isset($data["data"]))
             return ["data"=>null];
         return $data;
@@ -288,6 +248,7 @@ class Document extends  json_ready
      * @param $title
      * @param $code
      * @return Document
+     * @throws \Exception
      */
     static function not_found($title,$code)
     {
@@ -299,10 +260,4 @@ class Document extends  json_ready
             ]
         ));
     }
-
-    private function setIncludes (array $includes)
-    {
-    }
-
-
 }

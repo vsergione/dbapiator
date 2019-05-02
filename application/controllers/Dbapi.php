@@ -19,6 +19,8 @@ class Dbapi extends CI_Controller
 {
     private $apisDir;
     private $myConfig;
+    public $baseDomain;
+    public $apiId;
 
     /**
      * @var CI_DB_pdo_driver
@@ -43,9 +45,11 @@ class Dbapi extends CI_Controller
     function __construct ()
     {
         parent::__construct();
+
         $this->config->load("apiator",true);
         $this->myConfig = $this->config->item("apiator");
         $this->apisDir = $this->config->item("allApisDir");
+        $this->baseDomain = $this->config->item("base_domain");
 
         $this->load->helper("my_utils");
         header("Access-Control-Allow-Origin: *");
@@ -56,16 +60,21 @@ class Dbapi extends CI_Controller
      * initializes internal objects:
      * - apiDm: DataModel
      * - apiDb: database connection
-     * @param string $apiId
      */
-    private function _init($apiId)
+    private function _init()
     {
-        $apiConfigDir = $this->apisDir."/$apiId";
+        $arr = (explode($this->baseDomain,$_SERVER["SERVER_NAME"]));
+        if(count($arr)!==2)
+            HttpResp::redirect("https://launchpad.apiator");
+            //HttpResp::text_out(400,"Invalid request");
+        $this->apiId = $arr[0];
+
+        $apiConfigDir = $this->apisDir."/$this->apiId";
 
         if(!is_dir($apiConfigDir)) {
             // API Not found
             // TODO: log to admin log that API not found
-            HttpResp::not_found("API $apiId not found");
+            HttpResp::text_out(404,"API $this->apiId not found");
         }
 
         // load structure
@@ -157,9 +166,115 @@ class Dbapi extends CI_Controller
         }
     }
 
-    function update_bulk($apiId,$resourceName)
+    function dm()
     {
-        $this->_init($apiId);
+        $this->_init();
+        HttpResp::json_out(200,$this->apiDm->get_dataModel());
+    }
+
+    function swagger()
+    {
+        $this->_init();
+        $dm = $this->apiDm->get_dataModel();
+        $oas =  [
+            "swagger" => "2.0",
+            "info" => [
+                "description" => "Demoblog DB API",
+                "version" => "1.0.0",
+                "title" => "Demoblog",
+                "contact" => [
+                    "name" => "Sergiu Voicu",
+                    "email" => "svoicu@softaccel.net"
+                ],
+                "license" => [
+                    "name" => "GPL"
+                ]
+            ],
+            "host" => "5cbaed2eb9a51.api.apiator",
+            "basePath" => "/v2",
+            "schemes" => [ "https" ],
+            "consumes" => [ "application/vnd.api+json" ],
+            "produces" => [ "application/vnd.api+json" ],
+            "paths"=>[]
+        ];
+
+        foreach ($dm as $resName=>$resDef) {
+            // /resname
+            $oas["paths"]["/$resName"] = [];
+            $oas["paths"]["/$resName"]["get"] = [
+                "summary" => "Get $resName records list",
+                "parameters" => []
+            ];
+            $oas["paths"]["/$resName"]["get"]["parameters"][] = [
+                "name" => "fields[$resName]",
+                "in" => "query",
+                "required" => false,
+                "type" => "string",
+                "descriptions" => "Comma separated list of '$resName' field names",
+                "x-example" => join(",",
+                    array_merge(
+                        array_keys($resDef["fields"]),
+                        array_keys(
+                            array_filter($resDef["relations"],function ($var){
+                                return $var["type"]=="inbound";
+                            })
+                        )
+                    )
+                )
+            ];
+            $includes = [];
+            foreach ($resDef["relations"] as $relName=>$relSpec) {
+                $relFields = [
+                    "name" => "fields[{$relSpec["table"]}]",
+                    "in" => "query",
+                    "required" => false,
+                    "type" => "string",
+                    "descriptions" => "Comma separated list of '{$relSpec["table"]}' field names. Should be used only when '{$relSpec["table"]}' is included (see parameter 'includes')",
+                    "x-example" =>  join(",",
+                        array_merge(
+                            array_keys($dm[$relSpec["table"]]["fields"]),
+                            array_keys(
+                                array_filter($dm[$relSpec["table"]]["relations"],function ($var){
+                                    return $var["type"]=="inbound";
+                                })
+                            )
+                        )
+                    )
+                ];
+                $oas["paths"]["/$resName"]["get"]["parameters"][] = $relFields;
+                $includes[] = $relName;
+            }
+
+            $oas["paths"]["/$resName"]["get"]["parameters"][] = [
+                "name" => "includes",
+                "in" => "query",
+                "required" => false,
+                "type" => "string",
+                "descriptions" => "Comma separated list of relationships to include. See example for list of valid values",
+                "x-example" => implode(",",$includes)
+            ];
+
+
+            // /resname/id
+            $oas["paths"]["/$resName/{{$resDef["keyFld"]}}"] = [
+                "parameters"=>[
+                    "name" => $resDef["keyFld"],
+                    "in" => "path",
+                    "required" => true,
+                    "type" => "string",
+                    "description" => $resDef["keyFld"]." field"
+                ]
+            ];
+        }
+
+        HttpResp::json_out(200,$oas);
+    }
+
+
+
+    function update_bulk($resourceName)
+    {
+        $this->_init();
         $postData = json_decode($this->input->raw_input_stream);
         try{
             //validate_post_data($postData,["id"=>null,"type"=>["string"],"attributes"=>["object"]]);
@@ -184,7 +299,7 @@ class Dbapi extends CI_Controller
             }
 
             try {
-                $ids[] = $this->update($apiId, $resourceName, $item->id, $item);
+                $ids[] = $this->update($resourceName, $item->id, $item);
             }
             catch (Exception $e) {
                 $exceptions[] = new Exception("Failed to update record number $idx: ".$e->getMessage(),$e->getCode());
@@ -200,8 +315,11 @@ class Dbapi extends CI_Controller
         $doc = \JSONApi\Document::singleton([]);
         if(count($ids)) {
             $filterStr = $this->apiDm->get_key_fld($resourceName)."><".implode(";",$ids);
-            $filter = get_filters($filterStr,$resourceName);
-            $recs = $this->recs->get_records($resourceName,null,null, $filter);
+            $filter = get_filter($filterStr,$resourceName);
+
+            $recs = $this->recs->get_records($resourceName,[
+                "filter"=>$filter
+            ]);
             $doc = \JSONApi\Document::singleton($recs[0]);
         }
         if(count($exceptions)) {
@@ -216,16 +334,15 @@ class Dbapi extends CI_Controller
 
     /**
      * update one record
-     * @param string $apiId
      * @param string $resourceName
      * @param string $recId
      * @param null $updateData
      * @return Exception|string
      * @throws Exception
      */
-    function update($apiId, $resourceName, $recId, $updateData=null)
+    function update($resourceName, $recId, $updateData=null)
     {
-        $this->_init($apiId);
+        $this->_init();
         $internal = true;
 
         // POST data validation
@@ -275,8 +392,10 @@ class Dbapi extends CI_Controller
         }
 
         // check if record exists
-        $filters = get_filters("$resKeyFld=$recId",$resourceName);
-        list($recs,$total) = $this->recs->get_records($resourceName,null,null,$filters);
+        $filter = get_filter("$resKeyFld=$recId",$resourceName);
+        list($recs,$total) = $this->recs->get_records($resourceName,[
+            "filter"=>$filter
+        ]);
         if(!$total) {
             $exception = new Exception("Record not $recId of type '$resourceName' not found",404);
             if($internal)
@@ -289,7 +408,7 @@ class Dbapi extends CI_Controller
             $recId = $this->recs->update_by_id($resourceName, $recId, $updateData);
             if($internal)
                 return $recId;
-            $this->fetch_record_by_id($apiId,$resourceName,$recId);
+            $this->fetch_record_by_id($resourceName,$recId);
         }
         catch (Exception $exception) {
             if($internal)
@@ -304,34 +423,51 @@ class Dbapi extends CI_Controller
     /**
      * retrieves data from the database according with the provided parameters and outputs it to the client as JSON
      * processes a GET requests for /api/$apiId/$resName
-     * @param string $apiId
      * @param string $resName
      * @param bool $singleRec
      * TODO add limitation for absolute maximum records to return at a time
      * @throws Exception
      */
-    function fetch_multiple_records($apiId, $resName,$singleRec=false)
+    function fetch_multiple_records($resName,$singleRec=false)
     {
-        $this->_init($apiId);
+        $this->_init();
+        $opts = [];
 
-        // get query parameters
-        $include = $this->input->get("include");
-        $fields = $this->input->get("fields");
-        $filters = get_filters($this->input->get("filter"),$resName);
-        $offset = get_offset($this->input);
-        $pageSize = get_limit($this->input,$this->myConfig["default_result_set_limit"]);
-        $sortBy = get_sort($this->input,$resName);
-        //$relations = get_relations($this->input);
+        // get include
+        if($this->input->get("include"))
+            $opts["includeStr"] = $this->input->get("include");
+
+        // get sparse fieldset fields
+        if($flds = $this->input->get("fields")) {
+            if(is_array($flds))
+                $opts["fields"] = $flds;
+        }
+
+        // get paging parameters
+        $opts["offset"] = 0;
+        if($page = $this->input->get("page")) {
+            // get offset
+            if(isset($page["offset"]))
+                $opts["offset"] = intval($page["offset"]);
+
+            // get limit
+            if(isset($page["limit"]) && intval($page["limit"]))
+                $opts["limit"] = intval($page["limit"]);
+        }
+
+        // get filter
+        if($filterStr=$this->input->get("filter"))
+            $opts["filter"] = get_filter($filterStr,$resName);
+
+        // get sort
+        if($sortQry=$this->input->get("sort"))
+            $opts["order"] = get_sort($sortQry,$resName);
 
         try {
-            //list($records,$totalRecords);
-            list($records,$totalRecords) = $this->recs->get_records($resName,$include,$fields,$filters,$offset,$pageSize,$sortBy);
-            //print_r($records);
+            list($records,$totalRecords) = $this->recs->get_records($resName,$opts);
+            $doc = \JSONApi\Document::singleton($records);
+            $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$opts["offset"],"totalRecords"=>$totalRecords]));
 
-            $metaData = new stdClass();
-            $metaData->offset = $offset;
-            $metaData->total = $totalRecords;
-            $doc = \JSONApi\Document::singleton($records,\JSONApi\Meta::factory($metaData));
 
             HttpResp::json_out(200, $doc->json_data());
         }
@@ -343,27 +479,35 @@ class Dbapi extends CI_Controller
 
 
     /**
-     * @param $apiId
      * @param $resName
      * @param $recId
      */
-    function fetch_record_by_id($apiId,$resName,$recId)
+    function fetch_record_by_id($resName,$recId)
     {
-        $this->_init($apiId);
+        $this->_init();
 
         $keyFld = $this->apiDm->get_key_fld($resName);
         if(is_null($keyFld))
             HttpResp::json_out(400,"Request not supported. Resource does not have a primary key defined");
 
-        $include = $this->input->get("include");
-        $fields = $this->input->get("fields");
-        $_GET["filter"]= "$keyFld=$recId";
-        $filters = get_filters($this->input->get("filter"),$resName);
+
+        // get include
+        if($this->input->get("include"))
+            $opts["includeStr"] = $this->input->get("include");
+
+        // get sparse fieldset fields
+        if($flds = $this->input->get("fields")) {
+            if(is_array($flds))
+                $opts["fields"] = $flds;
+        }
+
+        // get filter
+        $opts["filter"] = get_filter("$keyFld=$recId",$resName);
 
         // fetch records
         try {
-            list($records,$totalRecords) = $this->recs->get_records($resName,$include,$fields,$filters);
-            print_r($records);
+
+            list($records,$totalRecords) = $this->recs->get_records($resName,$opts);
 
             if(!$totalRecords) {
                 $doc = \JSONApi\Document::not_found("Not found",404);
@@ -381,15 +525,14 @@ class Dbapi extends CI_Controller
 
 
     /**
-     * @param $apiId
      * @param $resourceName
      * @param $recId
      * @param $relationName
      * @throws Exception
      */
-    function fetch_relationships($apiId, $resourceName, $recId, $relationName)
+    function fetch_relationships( $resourceName, $recId, $relationName)
     {
-        $this->_init($apiId);
+        $this->_init();
 
         // detect relation type
         $relationType = null;
@@ -411,11 +554,14 @@ class Dbapi extends CI_Controller
 
         // prepare filter for matching the parent records
         $filterStr = $this->apiDm->get_key_fld($resourceName)."=$recId";
-        $filters = get_filters($filterStr,$resourceName);
+        $filter = get_filter($filterStr,$resourceName);
         $parent = null;
         // fetch parent record
         try {
-            list($records, $count) = $this->recs->get_records($resourceName, "", "", $filters);
+            list($records, $count) = $this->recs->get_records($resourceName, [
+                "filter"=> $filter
+            ]);
+
             if(!$count) {
                 HttpResp::not_found("RecordID $recId of $resourceName not found");
             }
@@ -429,11 +575,11 @@ class Dbapi extends CI_Controller
 
         if($relationType=="inbound") {
             $_GET["filter"] = @$_GET["filter"] . "," . $rel["field"] . "=" . $recId;
-            $this->fetch_multiple_records($apiId, $rel["table"]);
+            $this->fetch_multiple_records($rel["table"]);
         }
         if($relationType=="outbound") {
             $_GET["filter"] = $rel["field"]."=".$fkId;
-            $this->fetch_record_by_id($apiId,$rel["table"],$fkId);
+            $this->fetch_record_by_id($rel["table"],$fkId);
         }
 
     }
@@ -441,14 +587,14 @@ class Dbapi extends CI_Controller
 
     /**
      * method for inserting records in one table at a time. Supports single to multiple.
-     * @param $apiId
      * @param $tableName
      * @return null
      * TODO: add some limitation for maximum records to insert at a time
+     * @throws Exception
      */
-    public function simple_insert($apiId, $tableName)
+    public function simple_insert($tableName)
     {
-        $this->_init($apiId);
+        $this->_init();
 
         // POST data validation
         $postData = json_decode($this->input->raw_input_stream);
@@ -494,10 +640,12 @@ class Dbapi extends CI_Controller
 
                 $recIdFld = $this->apiDm->get_key_fld($entry->type);
                 $filterStr = "$recIdFld=$recId";
-                $filters = get_filters($filterStr,$tableName);
+                $filter = get_filter($filterStr,$tableName);
 
-
-                list($records,$noRecs) = $this->recs->get_records($tableName,implode(",",$includes),"",$filters);
+                list($records,$noRecs) = $this->recs->get_records($tableName,[
+                        "includeStr" => implode(",",$includes),
+                        "filter"=>$filter
+                    ]);
                 $totalRecords += $noRecs;
                 $insertedRecords = array_merge_recursive($insertedRecords,$records);
                 //die();
@@ -522,17 +670,15 @@ class Dbapi extends CI_Controller
         }
         $err = \JSONApi\Error::factory(["code"=>400,"title"=>"No records inserted due to invalid input data"]);
         HttpResp::jsonapi_out(400,\JSONApi\Document::error_doc($err));
-
     }
 
     /**
-     * @param $apiId
      * @param $tableName
      * @param $recId
      */
-    function single_delete($apiId, $tableName, $recId)
+    function single_delete($tableName, $recId)
     {
-        $this->_init($apiId);
+        $this->_init();
 
         try {
             $this->recs->delete($tableName, $recId);
@@ -544,14 +690,13 @@ class Dbapi extends CI_Controller
     }
 
     /**
-     * @param $apiId
      * @param $tableName
      * TODO: finish it
      */
-    function bulk_delete($apiId, $tableName)
+    function bulk_delete($tableName)
     {
         HttpResp::method_not_allowed();
-        $this->_init($apiId);
+        $this->_init();
 
         // check if table exists
         if (!$this->apiDm->resource_exists($tableName)) {
@@ -565,7 +710,16 @@ class Dbapi extends CI_Controller
 
     function index()
     {
-        echo "DBAPI IDX";
+        $this->_init();
+        HttpResp::json_out(200,[
+            "meta"=>[
+                "apiId"=>$this->apiId,
+                "baseUrl"=>"https://".$this->apiId.$this->baseDomain."/v2"
+            ],
+            "jsonapi"=>[
+                "version"=>"1.1"
+            ]
+        ]);
     }
 
     /**

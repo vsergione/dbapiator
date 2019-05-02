@@ -16,6 +16,11 @@ class Datamodel {
         return $this->valid;
     }
 
+    function get_dataModel()
+    {
+        return $this->dataModel;
+    }
+
     function get_idfld($table) {
         return $this->dataModel[$table]["keyFld"];
     }

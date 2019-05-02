@@ -12,59 +12,38 @@ namespace JSONApi;
  * Class Attributes
  * @package JSONApi
  */
-class Attributes
+class Attributes extends json_ready
 {
-    protected  $attributes = [];
+    /**
+     * @var object
+     */
+    protected $attributes;
 
     static function factory($attributes)
     {
-        return new Attributes($attributes);
+        return new self($attributes);
     }
 
-    function setAttributes(Array $array)
-    {
-        $this->attributes = $array;
-    }
-
-    function getAttributes()
-    {
-        return $this->attributes;
-    }
-
-
-    private function __construct ($attributes)
+    /**
+     * @param object $attributes
+     */
+    function setAttributes($attributes)
     {
         $this->attributes = $attributes;
     }
 
     /**
-     * @return \stdClass
+     * @return object
      */
-    public function extract_includes()
-    {
-        $includes = new \stdClass();
-        foreach ($this->attributes as $name=>$value) {
-            if(is_object($value)) {
-                $includes->$name = $value;
-                unset($this->attributes->$name);
-            }
-        }
-        return $includes;
-    }
-
-    public function __set ($name, $value)
-    {
-        $this->attributes[$name] = $value;
-    }
-
-    public function __get ($name)
-    {
-        if(!isset($this->attributes->$name))
-            throw new \Exception("Attribute $name does not exist");
-    }
-
-    function json_data()
+    function getAttributes()
     {
         return $this->attributes;
+    }
+
+    private function __construct ($attributes)
+    {
+        foreach ($attributes as $attr=>$value) {
+            $this->$attr = $value;
+        }
     }
 }

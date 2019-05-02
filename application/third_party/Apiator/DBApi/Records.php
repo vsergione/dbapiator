@@ -41,72 +41,12 @@ class Records {
     function __construct($dbDriver,$dataModel) {
         $this->dm = $dataModel;
         $this->dbdrv = $dbDriver;
-        $this->maxNoRels = get_instance()->config->item("max_inbound_recordset_size");
+        $this->maxNoRels = get_instance()->config->item("inbound_relationships_page_size");
     }
 
     static function init($dbDriver,$dataModel) {
         return new Records($dbDriver,$dataModel);
     }
-
-
-
-    /**
-     * @codeCoverageIgnore
-     * @param $totalRecs
-     * @param $data
-     * @param int $offset
-     * @param null $includeArr
-     * @return object
-     */
-    private function build_return_obj($totalRecs, $data, $offset=0, $includeArr=null) {
-        $data = is_array($data)?$data: [];
-        $return = (object) ["data"=>array_values($data)];
-        $return->meta = (object) ["total"=>$totalRecs,"offset"=>$offset];
-        if(count($includeArr)) {
-            $return->included = $includeArr;
-        }
-
-        return $return;
-    }
-
-
-    /**
-     * @codeCoverageIgnore
-     * @param array $order order array
-     * @param array $queryFromArr array of tables to query from
-     * @return array Array of strings  to be used in ORDER BY statement
-     */
-    private function generate_order_arr($order,$queryFromArr) {
-        $orderByArr = [];
-        foreach($order as $item) {
-            $item = (object) $item;
-            if(in_array($item->alias,$queryFromArr)) {
-                if($this->dm->is_valid_field($item->table,$item->fld))
-                    $orderByArr[] = sprintf("%s.%s %s",$item->table,$item->fld,$item->dir);
-            }
-        }
-        return $orderByArr;
-    }
-
-
-    /**
-     * extract ids from records in RecordSet
-     * @param mixed $data
-     * @return array List of extracted Record ids
-     */
-    private function get_ids($data)
-    {
-        $tmp = is_array($data)?$data: [$data];
-        $ids = [];
-        foreach($tmp as $rec) {
-            if(property_exists($rec,"id")) {
-                $idFld = $this->dm->get_key_fld($rec->type);
-                array_push($ids,$rec->$idFld);
-            }
-        }
-        return $ids;
-    }
-
 
 
     /**
@@ -125,11 +65,11 @@ class Records {
      *
      * @param string $top
      * @param string $includeStr string of comma separated includes
-     * @param string $fieldsStr string of comma separated field names to include
+     * @param array $fields
      * @return array
      * @throws \Exception
      */
-    private function generate_sql_parts($top, $includeStr, $fieldsStr)
+    private function generate_sql_parts($top, $includeStr, array $fields)
     {
         // parse & prepare includes
         $includeStr = trim($includeStr);
@@ -153,6 +93,16 @@ class Records {
                     "inbound" => $this->dm->get_inbound_relations($top)
                 ]
             ];
+
+            if(isset($fields[$top])) {
+                $relationTree[$top]["select"] = $fields[$top];
+
+                foreach (array_keys($relationTree[$top]["inbound"]) as $relName) {
+                    if(!in_array($relName,$fields[$top]))
+                        unset($relationTree[$top]["inbound"][$relName]);
+                }
+            }
+
         }
         catch (\Exception $exception) {
             throw new \Exception("Base table $top is invalid",400,$exception);
@@ -161,50 +111,22 @@ class Records {
 
         // populate relationTree tree by processing includes
         foreach ($includes as $include) {
-            $this->process_includes($relationTree[$top],$include);
-        }
-
-
-        // parse & prepare fields as in format path + field name
-        // where path is the way to navigate within the object
-        $fields = explode(",",$fieldsStr);
-        for($i=0;$i<count($fields);$i++) {
-            $fields[$i] = explode(".",trim($fields[$i]));
-            $fld = array_pop($fields[$i]);
-            array_unshift($fields[$i],$top);
-            $tmp = implode(".includes.",$fields[$i]);
-            $fields[$i] = [
-                "path"=>explode(".",$tmp),
-                "field"=>$fld
-            ];
-        }
-
-        // add selected fields
-        foreach ($fields as $field) {
-            try {
-                // identify node indicated by path
-                $table =& $this->find_in_tree($relationTree, $field["path"]);
-                if(in_array($field["field"],$table["fields"])){
-                    $table["select"][] = $field["field"];
-                }
-            }
-            catch (Exception $exception) {
-                //echo "wrong path";
-            }
-            //print_r($res["fields"][$field[""]]);
+            $this->process_includes($relationTree[$top],$include,$fields);
         }
 
         $select = [];
         $join = [];
         $this->prepare_query($relationTree[$top],0,$select,$join);
 
-        //print_r($join);
+
         $select = implode(", ",array_map(function($sel){
             return implode(", ",$sel);
         },$select));
         $join = implode(" \n",$join);
+
         return [$select,$join,$relationTree];
     }
+
 
     /**
      * generate include tree to be used for generating the SELECT clause
@@ -213,7 +135,7 @@ class Records {
      * @param array $include include path as array, where lower indices are parents of higher ones
      * @throws \Exception
      */
-    private function process_includes(&$parent, $include)
+    private function process_includes(&$parent, $include,$fields)
     {
         // if empty includes return
         if(!count($include)) {
@@ -232,7 +154,7 @@ class Records {
             $fkRel = $this->dm->get_outbound_relation($parent["name"], $relName);
 
             // check if joined resource already there and if not create it
-            if(!array_key_exists($relName,$parent["includes"]))
+            if(!array_key_exists($relName,$parent["includes"])) {
                 $parent["includes"][$relName] = [
                     "name" => $fkRel["table"],
                     "alias" => $alias,
@@ -242,14 +164,30 @@ class Records {
                     "inbound" => $this->dm->get_inbound_relations($fkRel["table"]),
                     "select" => [],
                     "includes" => [],
-                    "join" => $parent["alias"].".".$relName,
+                    "join" => $parent["alias"] . "." . $relName,
                     "type" => "1:1",
-                    "parent"=>&$parent
+                    "parent" => &$parent
                 ];
 
-            $this->process_includes($parent["includes"][$relName],$include);
+                // print_r($parent["includes"][$relName]);
+
+                // if there is a fields selection for current node set it for select
+                if(isset($fields[$fkRel["table"]])) {
+                    $parent["includes"][$relName]["select"] = $fields[$fkRel["table"]];
+                    foreach (array_keys($parent["includes"][$relName]["inbound"]) as $relName) {
+                        if(!in_array($relName,$fields[$fkRel["table"]]))
+                            unset($parent["includes"][$relName]["inbound"][$relName]);
+                    }
+                }
+            }
+            if(!empty($parent["select"]) && !in_array($relName,$parent["select"])) {
+                $parent["select"][] = $relName;
+            }
+
+            $this->process_includes($parent["includes"][$relName],$include,$fields);
         }
         catch (\Exception $exception) {
+            //print_r($exception);
         }
 
         if($inboundRel = $this->dm->get_inbound_relation($parent["name"], $relName)) {
@@ -267,78 +205,59 @@ class Records {
 
     /**
      * parses
-     * @param $obj
+     * @param $node
      * @param $start
      * @param $select
      * @param $join
      * @return int
      */
-    private function prepare_query(&$obj, $start,&$select,&$join)
+    private function prepare_query(&$node, $start, &$select, &$join)
     {
         try {
-            $id = $this->dm->get_key_fld($obj["name"]);
+            $id = $this->dm->get_key_fld($node["name"]);
         }
         catch (Exception $exception) {
             $id = null;
         }
 
-        $obj["keyFld"] = $id;
-        $obj["start"] = $start;
+        $node["keyFld"] = $id;
+        $node["offset"] = $start;
 
-        if(count($obj["select"])===0) {
-            $obj["select"] = $obj["fields"];
+        if(empty($node["select"])) {
+            $node["select"] = $node["fields"];
         }
 
-        $obj["select"][]=$id;
-        $obj["select"] = array_unique($obj["select"]);
-        $obj["noFlds"] = count($obj["select"]);
+        $node["select"][]=$id;
+        $node["select"] = array_unique($node["select"]);
+        $node["noFlds"] = count($node["select"]);
 
         // extract ID field position in the fields array
-        $obj["keyFldPos"] = $obj["keyFld"]?array_search($obj["keyFld"],$obj["fields"]):null;
-        $obj["keyFldPos"] = $obj["keyFldPos"]===false?null:$obj["keyFldPos"];
+        $node["keyFldPos"] = $node["keyFld"]?array_search($node["keyFld"],$node["select"]):null;
+        $node["keyFldPos"] = $node["keyFldPos"]===false?null:$node["keyFldPos"];
 
 
         // define currAlias global to be able to refer to it from inside the callback function
         global $currAlias;
-        $currAlias = $obj["alias"];
+        $currAlias = $node["alias"];
 
         // add alias prefix to field selection using an array_map and an anonymous function as callback
         $select[] = array_map(function($item){
             global $currAlias;
             return $currAlias.".$item";
-        },$obj["select"]);
+        },$node["select"]);
 
         // generate LEFT JOIN for joined tables
-        if(isset($obj["join"]))
+        if(isset($node["join"]))
             $join[] = sprintf("\nLEFT JOIN %s AS %s ON %s=%s.%s",
-                $obj["name"],$obj["alias"],$obj["join"],$obj["alias"],$obj["lnkFld"]);
+                $node["name"],$node["alias"],$node["join"],$node["alias"],$node["lnkFld"]);
 
-        $start += $obj["noFlds"];
-        foreach (array_keys($obj["includes"]) as $key) {
-            if($obj["includes"][$key]["type"]=="1:1")
-                $start = $this->prepare_query($obj["includes"][$key],$start,$select,$join);
+        $start += $node["noFlds"];
+        foreach (array_keys($node["includes"]) as $key) {
+            if($node["includes"][$key]["type"]=="1:1")
+                $start = $this->prepare_query($node["includes"][$key],$start,$select,$join);
         }
 
         return $start;
-    }
-
-
-    /**
-     * @param array $tree reference to array
-     * @param $path
-     * @return null|array
-     * @throws Exception
-     */
-    private function &find_in_tree(&$tree, $path)
-    {
-        if(count($path)==0)
-            return $tree;
-
-        $c = array_shift($path);
-        if(!isset($tree[$c])) {
-            throw new Exception("Wrong path");
-        }
-        return $this->find_in_tree($tree[$c],$path);
     }
 
     /**
@@ -346,14 +265,15 @@ class Records {
      * @param $row
      * @param $allRecs
      * @return null|\stdClass
+     * @throws \Exception
      */
     private function parse_result_row($node, $row,&$allRecs)
     {
-        $id = $row[$node["keyFldPos"]+$node["start"]];
+        $recId = $row[$node["keyFldPos"]+$node["offset"]];
         $rec = null;
 
-        if($id) {
-            $objIdx = $node["name"] . "_" . $id;
+        if($recId) {
+            $objIdx = $node["name"] . "_" . $recId;
             if(isset($allRecs[$objIdx])) {
                 $rec = &$allRecs[$objIdx];
             }
@@ -362,20 +282,21 @@ class Records {
         if(is_null($rec)){
             $attributes = new \stdClass();
             $relationships = [];
+
             for ($i = 0; $i < $node["noFlds"]; $i++) {
-                $fieldName = $node["fields"][$i];
+                $fieldName = $node["select"][$i];
                 if(isset($node["fks"][$fieldName])) {
                     $relationships[$fieldName] = new \stdClass();
                     $relationships[$fieldName]->type = $node["fks"][$fieldName]["table"];
-                    $relationships[$fieldName]->id = $row[$node["start"] + $i];
+                    $relationships[$fieldName]->id = $row[$node["offset"] + $i];
                 }
                 else {
-                    $attributes->$fieldName = $row[$node["start"] + $i];
+                    $attributes->$fieldName = $row[$node["offset"] + $i];
                 }
             }
 
             $rec = new \stdClass();
-            $rec->id = $id;
+            $rec->id = $recId;
             $rec->type = $node["name"];
             $rec->attributes = $attributes;
 
@@ -408,11 +329,13 @@ class Records {
                 $rec->relationships->$fk = $this->parse_result_row($incNode, $row, $allRecs);
             }
             if($incNode["type"]=="1:n") {
-                $filtrStr = $incNode["field"]."=".$rec->id;
-                $filtr = get_filters($filtrStr,$incNode["table"]);
-                list($recsss,$total) = $this->get_records($incNode["table"],null,null,$filtr,0,$this->maxNoRels);
-                //print_r($incNode["table"]."--".$filtrStr);
-                //print_r($recsss);
+                $filterStr = $incNode["field"]."=".$rec->id;
+                $filter = get_filter($filterStr,$incNode["table"]);
+
+                list($recsss,$total) = $this->get_records($incNode["table"],[
+                    "filter"=>$filter,
+                    "limit"=>$this->maxNoRels
+                ]);
                 $rec->relationships->$fk = $recsss;
             }
         }
@@ -460,17 +383,31 @@ class Records {
 
     /**
      * @param string $resName
-     * @param string $includeStr
-     * @param string $fieldsStr
-     * @param array $filters
-     * @param int $offset
-     * @param int $limit
-     * @param array $order
+     * @param array $opts [
+            "includeStr" => "",
+            "fields" => [],
+            "filters"=>[],
+            "offset"=>0,
+            "limit"=>0,
+            "order"=>[]
+        ]
      * @return array
      * @throws \Exception
      */
-    function get_records($resName, $includeStr, $fieldsStr, $filters=[], $offset=0, $limit=10, $order=[])
+    function get_records($resName,$opts=[])
     {
+
+        //$resName, $includeStr, $fields, $filters, $offset, $limit, $order
+        $defaultOpts = [
+            "includeStr" => "",
+            "fields" => [],
+            "filter"=>[],
+            "offset"=>0,
+            "limit"=>get_instance()->config->item("default_page_limit"),
+            "order"=>[]
+        ];
+        $opts = (object) array_merge($defaultOpts,$opts);
+
         // check if resource exists (to save time)
         if(!$this->dm->resource_exists($resName))
             throw new \Exception("Resource '$resName' not found",404);
@@ -479,7 +416,7 @@ class Records {
         if(!$this->dm->resource_allow_read($resName))
             throw new \Exception("Not authorized to read from '$resName''",401);
 
-        $whereStr = $this->get_where_str($filters,$resName);
+        $whereStr = $this->get_where_str($opts->filter,$resName);
         $countSql = "SELECT count(*) as cnt FROM $resName WHERE $whereStr";
 
         $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
@@ -488,15 +425,26 @@ class Records {
         if($totalRecs==0)
             return [$recordSet,0];
 
-        list($select,$join,$relTree) = $this->generate_sql_parts($resName,$includeStr,$fieldsStr);
-        //print_r($relTree);
+        foreach ($opts->fields as $res=>$fldsStr) {
+            $opts->fields[$res] = [];
+            $tmp = explode(",",$fldsStr);
+            foreach ($tmp as $fld) {
+                if($this->dm->is_valid_field($res,$fld))
+                    $opts->fields[$res][] = $fld;
+            }
+            if(empty($opts->fields[$res]))
+                unset($opts->fields[$res]);
+        }
 
-        $orderStr = $this->get_sort_str($order,$resName);
+        list($select,$join,$relTree) = $this->generate_sql_parts($resName,$opts->includeStr,$opts->fields);
+
+
+        $orderStr = $this->get_sort_str($opts->order,$resName);
         $mainSql = "SELECT $select FROM {$relTree[$resName]["name"]} AS {$relTree[$resName]["alias"]} "
             .($join!==""?$join:"")
             ." WHERE $whereStr"
             ." ORDER BY $orderStr"
-            ." LIMIT $offset,$limit";
+            ." LIMIT $opts->offset, $opts->limit";
 
         /** @var \CI_DB_result $res */
         //echo $mainSql."\n";
@@ -504,11 +452,13 @@ class Records {
         $rows = $res->result_array_num();
 
         $allRecs = [];
+//        print_r($relTree);
         foreach ($rows as $row) {
             $newRec = $this->parse_result_row($relTree[$resName],$row,$allRecs);
             $recordSet[] = $newRec;
         }
-        // print_r($recordSet);
+//        print_r($relTree);
+//        print_r($recordSet);
 
         return [$recordSet,$totalRecs];
 

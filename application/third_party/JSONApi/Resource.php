@@ -24,7 +24,7 @@ class Resource extends json_ready
      */
     protected $attributes;
     /**
-     * @var Relationships
+     * @var Relationship
      */
     protected $relationships;
     /**
@@ -37,65 +37,45 @@ class Resource extends json_ready
     protected $meta;
 
     /**
-     * @param string $type
-     * @param int $id
-     * @param Attributes|null $attributes
-     * @param Relationships|null $relationships
-     * @param Links|null $links
-     * @param Meta|null $meta
+     * @param object $data
      * @return Resource
+     * @throws \Exception
      */
-    static function factory($type,$id,Attributes $attributes=null,Relationships $relationships=null,Links $links=null,Meta $meta=null)
+    static function factory($data)
     {
-        $res = new self($type,$id,$attributes);
-        if($relationships)
-            $res->setRelationships($relationships);
-        if($links)
-            $res->setLinks($links);
-        if($meta)
-            $res->setMeta($meta);
+        if(!is_object($data))
+            throw new \Exception("Invalid data parameter when creating a new Resource: not an object");
+        if(!isset($data->type))
+            throw new \Exception("Invalid data parameter when creating a new Resource: type property missing");
+        if(!isset($data->id))
+            throw new \Exception("Invalid data parameter when creating a new Resource: id property missing");
+        if(!isset($data->attributes))
+            throw new \Exception("Invalid data parameter when creating a new Resource: attributes property missing");
+        if(!is_object($data->attributes))
+            throw new \Exception("Invalid data parameter when creating a new Resource: attributes property not an object");
+
+        $res = new self($data->type,$data->id);
+        $res->setAttributes(Attributes::factory($data->attributes));
+
+        if(!isset($data->relationships) || !is_object($data->relationships))
+            return $res;
+
+        foreach($data->relationships as $relName=>$relData) {
+            $res->addRelationship($relName,$relData);
+        }
 
         return $res;
-
     }
 
     /**
      * Resource constructor.
      * @param $type
      * @param $id
-     * @param $attributes
      */
-    private function __construct ($type,$id,$attributes)
+    private function __construct ($type,$id)
     {
         $this->id = $id;
         $this->type = $type;
-        $this->attributes = $attributes;
-        $rels = $this->attributes->extract_includes();
-        $doc = Document::singleton();
-
-        foreach ($rels as $relationName=>$relationData) {
-            // add to includes
-            if(!$this->relationships)
-                $this->relationships = Relationships::factory();
-
-            if($relationData->type==null) {
-                $this->relationships->addRelation($relationName, null);
-                continue;
-            }
-
-            $includedResource = $doc->addInclude(
-                Resource::factory(
-                    $relationData->type,
-                    $relationData->id,
-                    Attributes::factory(
-                        $relationData->attributes)));
-
-
-
-            $relation = Relationship::factory($includedResource);
-            if($relation)
-                $this->relationships->addRelation($relationName,$relation);
-        }
     }
 
 
@@ -145,7 +125,7 @@ class Resource extends json_ready
     }
 
     /**
-     * @param mixed $attributes
+     * @param Attributes $attributes
      * @return Resource
      */
     public function &setAttributes ($attributes)
@@ -163,12 +143,28 @@ class Resource extends json_ready
     }
 
     /**
-     * @param mixed $relationships
+     * @param $name
+     * @param mixed $data
      * @return Resource
+     * @throws \Exception
      */
-    public function &setRelationships ($relationships)
+    public function &addRelationship($name, $data)
     {
-        $this->relationships = $relationships;
+
+        if(empty($name))
+            throw new \Exception("Not allowed: empty relation name.");
+
+        // initializes relationships
+        if(!isset($this->relationships)) {
+            $this->relationships = new Relationships();
+        }
+
+        if(!isset($this->relationships->$name)) {
+            $this->relationships->$name = Relationship::factory($data,Links::factory([
+                "self"=>Document::singleton()->get_baseUrl()."/".$this->type."/".$this->id."/relationships/".$name
+            ]));
+        }
+
         return $this;
     }
 

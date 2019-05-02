@@ -49,7 +49,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | Examples:	my-controller/index	-> my_controller/index
 |		my-controller/my-method	-> my_controller/my_method
 */
-$route['default_controller'] = 'dbapi';
+$route['default_controller'] = 'home';
 //$route['404_override'] = 'errors/not_found';
 $route['translate_uri_dashes'] = false;
 
@@ -63,26 +63,26 @@ $route["^api/([\w\-\_]+)"] = "$controller/$1";
 //$route["^api/([\w\-\_]+)/([\w\-\_]+)"] = "$controller/api/$1";
 
 // api/$apiId/$resName
-$route["^v2\/([\w\-\_%]+)"]["get"] = "$controller/fetch_multiple_records/$1/$2";
-$route["^v2\/([\w\-\_%]+)"]["post"] = "$controller/simple_insert/$1/$2";
-$route["^v2\/([\w\-\_%]+)"]["delete"] = "$controller/bulk_delete/$1/$2";
-$route["^v2\/([\w\-\_%]+)"]["patch"] = "$controller/update_bulk/$1/$2";
+$route["^api/([\w\-\_%]+)/([\w\-\_%]+)"]["get"] = "$controller/fetch_multiple_records/$1/$2";
+$route["^api/([\w\-\_%]+)/([\w\-\_%]+)"]["post"] = "$controller/simple_insert/$1/$2";
+$route["^api/([\w\-\_%]+)/([\w\-\_%]+)"]["delete"] = "$controller/bulk_delete/$1/$2";
+$route["^api/([\w\-\_%]+)/([\w\-\_%]+)"]["patch"] = "$controller/update_bulk/$1/$2";
 
 
 
 // api/$apiId/$resName/$resId
-$route["^v2\/([\w\-\_%]+)/([\w\-\_%]+)$"]["get"] = "$controller/fetch_record_by_id/$1/$2/$3";
-$route["^v2\/([\w\-\_%]+)/([\w\-\_%]+)$"]["delete"] = "$controller/single_delete/$1/$2/$3";
-$route["^v2\/([\w\-\_%]+)/([\w\-\_%]+)$"]["patch"] = "$controller/update/$1/$2/$3";
-$route["^v2\/([\w\-\_%]+)/([\w\-\_%]+)$"]["post"] = "$controller/create/$1/$2/$3";
+$route["^api/([\w\-\_%]+)/([\w\-\_%]+)/([\w\-\_%]+)$"]["get"] = "$controller/fetch_record_by_id/$1/$2/$3";
+$route["^api/([\w\-\_%]+)/([\w\-\_%]+)/([\w\-\_%]+)$"]["delete"] = "$controller/single_delete/$1/$2/$3";
+$route["^api/([\w\-\_%]+)/([\w\-\_%]+)/([\w\-\_%]+)$"]["patch"] = "$controller/update/$1/$2/$3";
+$route["^api/([\w\-\_%]+)/([\w\-\_%]+)/([\w\-\_%]+)$"]["post"] = "$controller/create/$1/$2/$3";
 
 $route["^api\/([\w\-\_]+)\/([\w\-\_]+)\/([\w\-\_]+)\/relationships\/([\w\-\_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3/$4";
 
 
 // APIID/RESOURCE/ID/relationships/RELNAME
-$route["^v2\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["get"] = "$controller/read/$1/$2/$3/rels/$4";
-$route["^v2\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["put"] = "$controller/update/$1/$2/$3/rels/$4";
-$route["^v2\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["post"] = "$controller/create/$1/$2/$3/rels/$4";
-$route["^v2\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["delete"] = "$controller/delete/$1/$2/$3/rels/$4";
+$route["^api\/([\w\-\_%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["get"] = "$controller/read/$1/$2/$3/rels/$4";
+$route["^api\/([\w\-\_%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["put"] = "$controller/update/$1/$2/$3/rels/$4";
+$route["^api\/([\w\-\_%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["post"] = "$controller/create/$1/$2/$3/rels/$4";
+$route["^api\/([\w\-\_%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["delete"] = "$controller/delete/$1/$2/$3/rels/$4";
 
 $route["^api/(.*)"]["options"] = "$controller/options";

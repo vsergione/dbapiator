@@ -211,7 +211,7 @@ function get_updatefields($input,$defaultTable) {
  * @param string $defaultTable
  * @return array
  */
-function get_filters($rawFilterStr,$defaultTable)
+function get_filter($rawFilterStr, $defaultTable)
 {
     $filters = [];
     // split string by comma and process each segment
@@ -258,29 +258,16 @@ function get_limit($input,$defaultValue)
 
 }
 
-/**
- * @param CI_Input $input
- * @param null $defaultValue
- * @return null
- */
-function get_groupby($input,$defaultValue=null) {
-    return empty($input->get("groupby"))?$defaultValue:$input->get("groupby");
-}
 
 /**
- * @param CI_Input $input
+ * @param string $str
  * @param string $defaultTable
  * @return array
  */
-function get_sort($input,$defaultTable)
+function get_sort($str,$defaultTable)
 {
-
-    $sort = [];
-    if(empty($input->get("sort")))
-        return $sort;
-
     // generate sort array
-    $arr = explode(",",$input->get("sort"));
+    $arr = explode(",",$str);
     foreach($arr as $item) {
         $dir = substr($item,0,1)=="-"?"DESC":"ASC";
         $fld = $dir=="DESC"?substr($item,1):$item;
