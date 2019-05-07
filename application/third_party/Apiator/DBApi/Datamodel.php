@@ -309,11 +309,11 @@ class Datamodel {
     {
         if (!$this->resource_exists($table))
             throw new \Exception("Invalid resource $table", 400);
-        if (!isset($this->dataModel[$table]["referencedBy"])
-            || !isset($this->dataModel[$table]["referencedBy"][$relName]))
+        if (!isset($this->dataModel[$table]["relations"])
+            || !isset($this->dataModel[$table]["relations"][$relName]))
             throw new \Exception("Invalid relationship $relName of $table");
 
-        return $this->dataModel[$table]["referencedBy"][$relName];
+        return $this->dataModel[$table]["relations"][$relName];
     }
 
     /**
@@ -601,7 +601,6 @@ class Datamodel {
              *       implement a proper mechanism inside the is_valid_value method
              */
 
-
             if(!is_object($attrVal))
                 $attributes[$attrName] = $attrVal;
         }
@@ -652,10 +651,13 @@ class Datamodel {
     public function get_inbound_relation ($tableName,$relName)
     {
         //echo "$tableName $relName";
-        if(!isset($this->dataModel[$tableName]["referencedBy"]) || !isset($this->dataModel[$tableName]["referencedBy"][$relName]))
+        if(!isset($this->dataModel[$tableName]["relations"]) || !isset($this->dataModel[$tableName]["relations"][$relName]))
             return null;
 
-        return $this->dataModel[$tableName]["referencedBy"][$relName];
+        if($this->dataModel[$tableName]["relations"][$relName]["type"]=="inbound")
+            return $this->dataModel[$tableName]["relations"][$relName];
+        return null;
+
     }
 
     /**
@@ -673,7 +675,7 @@ class Datamodel {
      */
     public function resource_allow_insert ($resName)
     {
-        return isset($this->dataModel[$resName]["create"])?$this->dataModel[$resName]["create"]:false;
+        return isset($this->dataModel[$resName]["insert"])?$this->dataModel[$resName]["insert"]:false;
 
     }
 
@@ -706,7 +708,6 @@ class Datamodel {
             if(isset($fieldSpec["foreignKey"]))
                 $fks[$fieldName] = $fieldSpec["foreignKey"];
         }
-
         return $fks;
     }
 
@@ -716,10 +717,14 @@ class Datamodel {
      */
     public function get_inbound_relations ($tableName)
     {
-        if(!isset($this->dataModel[$tableName]["referencedBy"])) {
+        if(!isset($this->dataModel[$tableName]["relations"])) {
             return [];
         }
-        return $this->dataModel[$tableName]["referencedBy"];
+        return array_filter($this->dataModel[$tableName]["relations"],
+            function($item) {
+                return $item["type"]=="inbound";
+            }
+        );
     }
 
 

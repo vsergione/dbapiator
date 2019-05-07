@@ -50,12 +50,12 @@ class HttpResp{
 
     /**
      * set response code
-     * @param string|int $code HTTP response code
+     * @param string|int $statusCode HTTP response code
      * @return HttpResp $this
      */
-    public function &response_code($code)
+    public function &response_code($statusCode)
     {
-        $this->responseCode = $code;
+        $this->responseCode = $statusCode;
         return $this;
     }
 
@@ -177,15 +177,15 @@ class HttpResp{
 
     /**
      * shorthand method for making a quick response
-     * @param string|int $code HTTP response code
+     * @param string|int $statusCode HTTP response code
      * @param string $contentType HTTP content type
      * @param string $body HTTP response body
      */
-    static function quick($code,$contentType=null,$body=null)
+    static function quick($statusCode, $contentType=null, $body=null)
     {
         $resp = HttpResp::init();
         $resp
-            ->response_code($code)
+            ->response_code($statusCode)
             ->content_type($contentType)
             ->body($body)
             ->output();
@@ -194,15 +194,15 @@ class HttpResp{
 
 
     /**
-     * @param $code
+     * @param $statusCode
      * @param $contentType
      * @param null $body
      * @param null $headers
      */
-    static private function ctype_out($code,$contentType,$body=null,$headers=null)
+    static private function ctype_out($statusCode, $contentType, $body=null, $headers=null)
     {
         if(is_null($headers))
-            HttpResp::quick($code, $contentType,  $body);
+            HttpResp::quick($statusCode, $contentType,  $body);
 
         $resp = HttpResp::init();
         if(is_array($headers))
@@ -276,31 +276,31 @@ class HttpResp{
     /**
      * helper method for creating a response for json cType. JSON encodes the body when not encoded already.
      * Ends the script after output
-     * @param string|int $code HTTP response code
+     * @param string|int $statusCode HTTP response code
      * @param string|array|object $body
      * @param array|string $headers assoc array of key->value or string containing header string
      */
-    static function json_out($code,$body=null,$headers=null)
+    static function json_out($statusCode, $body=null, $headers=null)
     {
         if(is_array($body) || is_object($body))
             $body = json_encode($body,JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
-        HttpResp::ctype_out($code,"application/json",$body,$headers);
+        HttpResp::ctype_out($statusCode,"application/json",$body,$headers);
     }
 
     /**
-     * @param $code
+     * @param $statusCode
      * @param \JSONApi\Document $doc
      */
-    static function jsonapi_out($code,$doc)
+    static function jsonapi_out($statusCode, $doc)
     {
         $body = json_encode($doc->json_data(),JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        HttpResp::ctype_out($code,"application/json",$body);
+        HttpResp::ctype_out($statusCode,"application/json",$body);
     }
 
-    static function error_out_json($message,$code)
+    static function error_out_json($message, $statusCode)
     {
-        HttpResp::json_out($code,[
+        HttpResp::json_out($statusCode,[
             "errors"=>[
                 ["message"=>$message]
             ]
@@ -318,12 +318,12 @@ class HttpResp{
 
     /**
      * shorthand method for generating & sending an XML response
-     * @param string|int $code HTTP response code
+     * @param string|int $statusCode HTTP response code
      * @param string|array|object $body
      * @param string|array|null $headers
      * @return bool
      */
-    static function xml_out($code,$body=null,$headers=null)
+    static function xml_out($statusCode, $body=null, $headers=null)
     {
         // TODO: implement XML output
         return true;
@@ -331,41 +331,41 @@ class HttpResp{
 
     /**
      * shorthand method for generating & sending a test response
-     * @param string|int $code HTTP response code
+     * @param string|int $statusCode HTTP response code
      * @param string $body
      */
-    static function text_out($code,$body=null)
+    static function text_out($statusCode, $body=null)
     {
-        HttpResp::quick($code,"text/plain",$body);
+        HttpResp::quick($statusCode,"text/plain",$body);
     }
 
     /**
      * shorthand method for generating & sending a html response
-     * @param string|int $code HTTP response code
+     * @param string|int $statusCode HTTP response code
      * @param string $body
      */
-    static function html_out($code,$body=null)
+    static function html_out($statusCode, $body=null)
     {
-        HttpResp::quick($code,"text/html",$body);
+        HttpResp::quick($statusCode,"text/html",$body);
     }
 
     /**
-     * @param $code
+     * @param $statusCode
      */
-    static function no_content($code)
+    static function no_content($statusCode)
     {
-        HttpResp::quick($code);
+        HttpResp::quick($statusCode);
     }
 
     /**
      * shorthand method for performing a redirect
      * @param string $location
-     * @param string|int $code HTTP response code; defaults to 301 Moved permanently
+     * @param string|int $statusCode HTTP response code; defaults to 301 Moved permanently
      */
-    static function redirect($location,$code=301)
+    static function redirect($location, $statusCode=301)
     {
         HttpResp::init()
-            ->response_code($code)
+            ->response_code($statusCode)
             ->header("Location",$location)
             ->output();
         exit();

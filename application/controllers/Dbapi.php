@@ -175,99 +175,9 @@ class Dbapi extends CI_Controller
     function swagger()
     {
         $this->_init();
-        $dm = $this->apiDm->get_dataModel();
-        $oas =  [
-            "swagger" => "2.0",
-            "info" => [
-                "description" => "Demoblog DB API",
-                "version" => "1.0.0",
-                "title" => "Demoblog",
-                "contact" => [
-                    "name" => "Sergiu Voicu",
-                    "email" => "svoicu@softaccel.net"
-                ],
-                "license" => [
-                    "name" => "GPL"
-                ]
-            ],
-            "host" => "5cbaed2eb9a51.api.apiator",
-            "basePath" => "/v2",
-            "schemes" => [ "https" ],
-            "consumes" => [ "application/vnd.api+json" ],
-            "produces" => [ "application/vnd.api+json" ],
-            "paths"=>[]
-        ];
-
-        foreach ($dm as $resName=>$resDef) {
-            // /resname
-            $oas["paths"]["/$resName"] = [];
-            $oas["paths"]["/$resName"]["get"] = [
-                "summary" => "Get $resName records list",
-                "parameters" => []
-            ];
-            $oas["paths"]["/$resName"]["get"]["parameters"][] = [
-                "name" => "fields[$resName]",
-                "in" => "query",
-                "required" => false,
-                "type" => "string",
-                "descriptions" => "Comma separated list of '$resName' field names",
-                "x-example" => join(",",
-                    array_merge(
-                        array_keys($resDef["fields"]),
-                        array_keys(
-                            array_filter($resDef["relations"],function ($var){
-                                return $var["type"]=="inbound";
-                            })
-                        )
-                    )
-                )
-            ];
-            $includes = [];
-            foreach ($resDef["relations"] as $relName=>$relSpec) {
-                $relFields = [
-                    "name" => "fields[{$relSpec["table"]}]",
-                    "in" => "query",
-                    "required" => false,
-                    "type" => "string",
-                    "descriptions" => "Comma separated list of '{$relSpec["table"]}' field names. Should be used only when '{$relSpec["table"]}' is included (see parameter 'includes')",
-                    "x-example" =>  join(",",
-                        array_merge(
-                            array_keys($dm[$relSpec["table"]]["fields"]),
-                            array_keys(
-                                array_filter($dm[$relSpec["table"]]["relations"],function ($var){
-                                    return $var["type"]=="inbound";
-                                })
-                            )
-                        )
-                    )
-                ];
-                $oas["paths"]["/$resName"]["get"]["parameters"][] = $relFields;
-                $includes[] = $relName;
-            }
-
-            $oas["paths"]["/$resName"]["get"]["parameters"][] = [
-                "name" => "includes",
-                "in" => "query",
-                "required" => false,
-                "type" => "string",
-                "descriptions" => "Comma separated list of relationships to include. See example for list of valid values",
-                "x-example" => implode(",",$includes)
-            ];
-
-
-            // /resname/id
-            $oas["paths"]["/$resName/{{$resDef["keyFld"]}}"] = [
-                "parameters"=>[
-                    "name" => $resDef["keyFld"],
-                    "in" => "path",
-                    "required" => true,
-                    "type" => "string",
-                    "description" => $resDef["keyFld"]." field"
-                ]
-            ];
-        }
-
-        HttpResp::json_out(200,$oas);
+        $this->load->helper("swagger");
+        $openApiSpec = generate_swagger($this->apiId,$this->apiDm->get_dataModel());
+        HttpResp::json_out(200,$openApiSpec);
     }
 
 
@@ -408,7 +318,7 @@ class Dbapi extends CI_Controller
             $recId = $this->recs->update_by_id($resourceName, $recId, $updateData);
             if($internal)
                 return $recId;
-            $this->fetch_record_by_id($resourceName,$recId);
+            $this->fetch_single($resourceName,$recId);
         }
         catch (Exception $exception) {
             if($internal)
@@ -428,7 +338,7 @@ class Dbapi extends CI_Controller
      * TODO add limitation for absolute maximum records to return at a time
      * @throws Exception
      */
-    function fetch_multiple_records($resName,$singleRec=false)
+    function fetch_multiple($resName, $singleRec=false)
     {
         $this->_init();
         $opts = [];
@@ -482,7 +392,7 @@ class Dbapi extends CI_Controller
      * @param $resName
      * @param $recId
      */
-    function fetch_record_by_id($resName,$recId)
+    function fetch_single($resName, $recId)
     {
         $this->_init();
 
@@ -528,6 +438,18 @@ class Dbapi extends CI_Controller
      * @param $resourceName
      * @param $recId
      * @param $relationName
+     */
+    function update_relationships($resourceName, $recId, $relationName)
+    {
+        $this->_init();
+        print_r(func_get_args());
+    }
+
+
+    /**
+     * @param $resourceName
+     * @param $recId
+     * @param $relationName
      * @throws Exception
      */
     function fetch_relationships( $resourceName, $recId, $relationName)
@@ -535,20 +457,14 @@ class Dbapi extends CI_Controller
         $this->_init();
 
         // detect relation type
-        $relationType = null;
-        if($rel = $this->apiDm->get_inbound_relation($resourceName, $relationName)) {
-            $relationType = "inbound";
+        try {
+            $relSpec = $this->apiDm->get_relationship($resourceName, $relationName);
+            $relationType = $relSpec["type"];
+            $relRes = $relSpec["table"];
         }
-        else {
-            try {
-                $rel = $this->apiDm->get_outbound_relation($resourceName, $relationName);
-                $relationType = "outbound";
-            }
-            catch (Exception $exception) {
-                $doc = \JSONApi\Document::singleton()
-                    ->addError(\JSONApi\Error::factory(["title" => "Invalid relation $relationName of $resourceName"]));
-                HttpResp::json_out(400, $doc->json_data());
-            }
+        catch (Exception $exception) {
+            $doc = \JSONApi\Document::from_exception($exception);
+            HttpResp::json_out($exception->getCode(), $doc->json_data());
         }
 
 
@@ -567,19 +483,19 @@ class Dbapi extends CI_Controller
             }
             $parent = $records[0];
             if($relationType=="outbound")
-                $fkId = $parent->attributes->$relationName;
+                $fkId = $parent->relationships->$relationName->id;
         }
         catch (Exception $exception) {
             HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
         }
 
         if($relationType=="inbound") {
-            $_GET["filter"] = @$_GET["filter"] . "," . $rel["field"] . "=" . $recId;
-            $this->fetch_multiple_records($rel["table"]);
+            $_GET["filter"] = @$_GET["filter"] . "," . $relSpec["field"] . "=" . $recId;
+            $this->fetch_multiple($relSpec["table"]);
         }
         if($relationType=="outbound") {
-            $_GET["filter"] = $rel["field"]."=".$fkId;
-            $this->fetch_record_by_id($rel["table"],$fkId);
+            $_GET["filter"] = $relSpec["field"]."=".$fkId;
+            $this->fetch_single($relSpec["table"],$fkId);
         }
 
     }
