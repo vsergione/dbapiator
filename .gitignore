@@ -2,6 +2,6 @@ upload/*
 .idea/
 .idea/*
 /apiator.raml10.yaml
-/apiator_data/
+/apiator_data
 /test.php
 /test.php.txt
