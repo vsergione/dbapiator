@@ -1,8 +1,7 @@
 upload/*
 .idea/
 .idea/*
-log-2019-01-07.txt
-log-2019-01-08.txt
-log-2019-01-09.txt
-log-2019-01-10.txt
-log-2019-01-17.txt
+/apiator.raml10.yaml
+/apiator_data/
+/test.php
+/test.php.txt
