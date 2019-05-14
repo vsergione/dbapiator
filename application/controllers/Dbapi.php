@@ -65,7 +65,8 @@ class Dbapi extends CI_Controller
     {
         $arr = (explode($this->baseDomain,$_SERVER["SERVER_NAME"]));
         if(count($arr)!==2)
-            HttpResp::redirect("https://launchpad.apiator");
+            HttpResp::text_out(404,"Resource not found");
+
             //HttpResp::text_out(400,"Invalid request");
         $this->apiId = $arr[0];
 
