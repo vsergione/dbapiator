@@ -5,3 +5,4 @@ upload/*
 /apiator_data
 /test.php
 /test.php.txt
+/application/config/config.php
