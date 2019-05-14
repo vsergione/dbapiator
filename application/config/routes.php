@@ -90,4 +90,3 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"
 //$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["post"] = "$controller/create/$1/$2/$3/rels/$4";
 //$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["delete"] = "$controller/delete/$1/$2/$3/rels/$4";
 
-//$route["^api/(.*)"]["options"] = "$controller/options";
