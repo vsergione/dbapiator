@@ -46,9 +46,8 @@ class Dbapi extends CI_Controller
     {
         parent::__construct();
 
-        $this->config->load("apiator",true);
-        $this->myConfig = $this->config->item("apiator");
-        $this->apisDir = $this->config->item("allApisDir");
+        $this->config->load("apiator");
+        $this->apisDir = $this->config->item("apisDir");
         $this->baseDomain = $this->config->item("base_domain");
 
         $this->load->helper("my_utils");

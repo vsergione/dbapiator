@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
-$config["allApisDir"] = "/var/www/domains/apiator/apiator_data/___apis";
+$config["apisDir"] = "/var/www/domains/apiator/apiator_data/___apis";
 //$config['base_url'] = 'https://dbapi.apiator/';
 $config['base_domain'] = ".api.apiator";
 $config['bulk_update_limit'] = 3;

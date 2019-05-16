@@ -81,12 +81,9 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["delete"] = "$controller/s
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["patch"] = "$controller/update/$1/$2/$3";
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["post"] = "$controller/create/$1/$2/$3";
 
-//$route["^api\/([\w\-\_]+)\/([\w\-\_]+)\/([\w\-\_]+)\/relationships\/([\w\-\_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3/$4";
-
 
 // APIID/RESOURCE/ID/relationships/RELNAME
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3";
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["patch"] = "$controller/update_relationships/$1/$2/$3";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["post"] = "$controller/create/$1/$2/$3/rels/$4";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["delete"] = "$controller/delete/$1/$2/$3/rels/$4";
+
 

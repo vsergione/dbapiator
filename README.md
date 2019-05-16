@@ -37,7 +37,7 @@ Using GIT, clone the repo on your machine:
 Open /application/config/config.php and update the following variables:
 
     // folder where the APIs configuration files are stored
-    $config["allApisDir"] = "/path/to/apis_config_files_folder";
+    $config["apisDir"] = "/path/to/apis_config_files_folder";
     
     // to be used when API ID is part in the subdomain
     // eg. https://my_api_id.sub.do.main
