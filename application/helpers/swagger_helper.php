@@ -486,7 +486,7 @@ function delete_single_record($name, $def)
  * @param $dataModel
  * @return array
  */
-function generate_swagger($apiId,$dataModel)
+function generate_swagger($apiId,$dataModel,$baseDomain,$basePath)
 {
     $openApiSpec =  [
         "swagger" => "2.0",
@@ -502,8 +502,8 @@ function generate_swagger($apiId,$dataModel)
                 "name" => "GPL"
             ]
         ],
-        "host" => "$apiId.api.apiator",
-        "basePath" => "/v2",
+        "host" => $apiId.$baseDomain,
+        "basePath" => $basePath,
         "schemes" => [ "https" ],
         "consumes" => [ "application/vnd.api+json" ],
         "produces" => [ "application/vnd.api+json" ],

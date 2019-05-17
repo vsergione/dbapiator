@@ -176,7 +176,7 @@ class Dbapi extends CI_Controller
     {
         $this->_init();
         $this->load->helper("swagger");
-        $openApiSpec = generate_swagger($this->apiId,$this->apiDm->get_dataModel());
+        $openApiSpec = generate_swagger($this->apiId,$this->apiDm->get_dataModel(),$this->config->item("base_domain"),"/v2");
         HttpResp::json_out(200,$openApiSpec);
     }
 
