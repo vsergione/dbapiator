@@ -291,6 +291,9 @@ function search_recursive($resName,$resSpec,$path,&$fields,&$includes,&$dm,$recu
             $fields[$resName][] = $fldName;
     }
 
+    if(!isset($resSpec["relations"]))
+        return;
+
     foreach ($resSpec["relations"] as $relName => $relSpec) {
         if ($relSpec["select"])
             $fields[$resName][] = $relName;
