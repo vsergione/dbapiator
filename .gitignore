@@ -6,3 +6,4 @@ upload/*
 /test.php
 /test.php.txt
 /application/config/config.php
+/application/config/apiator.php
