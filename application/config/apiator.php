@@ -15,4 +15,4 @@ $config["apisDir"] = "/var/www/domains/apiator/apiator_data/___apis";
 $config["base_domain"] = ".dbapi.apiator";
 
 // default recordset page size
-$config["default_page_size"] = 10;
+$config["default_page_limit"] = 10;

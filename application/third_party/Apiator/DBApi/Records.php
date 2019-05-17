@@ -447,7 +447,7 @@ class Records {
             ." LIMIT $opts->offset, $opts->limit";
 
         /** @var \CI_DB_result $res */
-        //echo $mainSql."\n";
+        echo $mainSql."\n";
         $res = $this->dbdrv->query($mainSql);
         $rows = $res->result_array_num();
 
