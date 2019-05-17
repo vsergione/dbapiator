@@ -373,9 +373,12 @@ function post_single_record($resName,$def)
             $fields[] = $fldName;
     }
 
-    foreach ($def["relations"] as $relName => $relSpec) {
-        if($relSpec["update"])
-            $fields[] = $relName;
+
+    if(isset($def["relations"])) {
+        foreach ($def["relations"] as $relName => $relSpec) {
+            if ($relSpec["update"])
+                $fields[] = $relName;
+        }
     }
     $fields = array_unique($fields);
 
@@ -669,6 +672,8 @@ function generate_swagger($apiId,$dataModel)
          * /s/resource/ID/relationships
          ***********************************************/
         $resPath = "$resPath/relationships/";
+        if(!isset($resSpec["relations"]))
+            continue;
         foreach ($resSpec["relations"] as $relName=>$relSpec) {
             $openApiSpec["paths"][$resPath.$relName] = [];
             if($get=get_relation($relSpec["table"],$dataModel[$relSpec["table"]],$dataModel)) {
