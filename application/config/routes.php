@@ -65,6 +65,7 @@ $route["^api/([\w\-\_]+)"] = "$controller/$1";
 // APIID/EP
 //$route["^api/([\w\-\_]+)/([\w\-\_]+)"] = "$controller/api/$1";
 
+
 // api/$apiId/$resName
 $route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/fetch_multiple/$1/$2";
 $route["^$stdOpsPath\/([\w\-\_\%]+)"]["post"] = "$controller/simple_insert/$1/$2";
@@ -77,7 +78,7 @@ $route["^$blkOpsPath\/([\w\-\_\%]+)"]["patch"] = "$controller/bulk_update/$1/$2"
 $route["^$blkOpsPath\/([\w\-\_\%]+)"]["delete"] = "$controller/bulk_delete/$1/$2";
 $route["^$blkOpsPath\/([\w\-\_\%]+)"]["options"] = "$controller/options/$1/$2";
 
-
+$route["^swagger"]["get"] = "$controller/swagger";
 
 // api/$apiId/$resName/$resId
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["get"] = "$controller/fetch_single/$1/$2/$3";

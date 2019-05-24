@@ -364,6 +364,8 @@ function patch_single_record($resName,$def)
  */
 function post_single_record($resName,$def)
 {
+    if(!isset($def["insert"]))
+        return [];
     if(!$def["insert"])
         return [];
 
