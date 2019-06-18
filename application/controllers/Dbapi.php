@@ -384,8 +384,6 @@ class Dbapi extends CI_Controller
 
         try {
             list($records,$totalRecords) = $this->recs->get_records($resName,$opts);
-            print_r($records);
-            die();
             $doc = \JSONApi\Document::singleton($records);
             $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$opts["offset"],"totalRecords"=>$totalRecords]));
 

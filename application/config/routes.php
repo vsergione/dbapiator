@@ -57,8 +57,16 @@ $route['translate_uri_dashes'] = false;
 // /api/apiName/entryPoint
 $controller = "dbapi";
 $basePath = "v2";
+
+// ApiId part of the domain name
 $stdOpsPath = $basePath;
-$blkOpsPath = $basePath."\/b";
+$blkOpsPath =  $basePath."\/b";
+
+
+// ApiId part of the server path
+//$stdOpsPath = "[0-9a-z]+\/$basePath";
+//$blkOpsPath =  "[0-9a-z]+\/".$basePath."\/b";
+
 // API
 $route["^api/([\w\-\_]+)"] = "$controller/$1";
 
