@@ -52,17 +52,7 @@ class Dbapi extends CI_Controller
     }
 
 
-    private function get_api_id()
-    {
-        /**
-         * used to extract API_ID when hostname is like %API_ID%.%SOME_DOMAIN_NAME%
-         */
-        $arr = explode($this->config->item("base_domain"),$_SERVER["SERVER_NAME"]);
-        if(count($arr)!==2)
-            HttpResp::text_out(404,"Resource not found");
 
-        return $arr[0];
-    }
     /**
      * reads API configuration file, connects to the database and initializes the API DataModel (structure)
      * initializes internal objects:
@@ -71,11 +61,14 @@ class Dbapi extends CI_Controller
      */
     private function _init()
     {
-
         switch ($this->deployment_type) {
             case "saas":
-                $this->get_api_id();
-                $apiConfigDir = $this->config->item("apisDir")."/".$this->get_api_id();
+                // API ID is retrieved by a function provided in the config file by the name "api_id"
+                $apiId = $this->config->item("api_id")();
+                if(is_null($apiId))
+                    HttpResp::error_out_json("Invalid call",400);
+
+                $apiConfigDir = $this->config->item("apisDir")."/$apiId";
                 break;
             case "single":
                 $apiConfigDir = $this->config->item("api_config_dir");
