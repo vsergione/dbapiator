@@ -17,11 +17,6 @@ require_once(APPPATH."third_party/Apiator/Autoloader.php");
  */
 class Dbapi extends CI_Controller
 {
-    private $apisDir;
-    private $myConfig;
-    public $baseDomain;
-    public $apiId;
-
     /**
      * @var CI_DB_pdo_driver
      */
@@ -41,19 +36,33 @@ class Dbapi extends CI_Controller
      * @var \Apiator\DBApi\Records
      */
     private $recs;
+    private $deployment_type;
 
     function __construct ()
     {
         parent::__construct();
 
         $this->config->load("apiator");
-        $this->apisDir = $this->config->item("apisDir");
-        $this->baseDomain = $this->config->item("base_domain");
+        $this->deployment_type = $this->config->item("deployment_type");
+        if(empty( $this->deployment_type))
+            HttpResp::server_error("Invalid config. Deployment type unknown.");
 
         $this->load->helper("my_utils");
         header("Access-Control-Allow-Origin: *");
     }
 
+
+    private function get_api_id()
+    {
+        /**
+         * used to extract API_ID when hostname is like %API_ID%.%SOME_DOMAIN_NAME%
+         */
+        $arr = explode($this->config->item("base_domain"),$_SERVER["SERVER_NAME"]);
+        if(count($arr)!==2)
+            HttpResp::text_out(404,"Resource not found");
+
+        return $arr[0];
+    }
     /**
      * reads API configuration file, connects to the database and initializes the API DataModel (structure)
      * initializes internal objects:
@@ -62,19 +71,25 @@ class Dbapi extends CI_Controller
      */
     private function _init()
     {
-        $arr = (explode($this->baseDomain,$_SERVER["SERVER_NAME"]));
-        if(count($arr)!==2)
-            HttpResp::text_out(404,"Resource not found");
 
-            //HttpResp::text_out(400,"Invalid request");
-        $this->apiId = $arr[0];
+        switch ($this->deployment_type) {
+            case "saas":
+                $this->get_api_id();
+                $apiConfigDir = $this->config->item("apisDir")."/".$this->get_api_id();
+                break;
+            case "single":
+                $apiConfigDir = $this->config->item("api_config_dir");
+                break;
+            default:
+                HttpResp::server_error("Invalid deployment type");
 
-        $apiConfigDir = $this->apisDir."/$this->apiId";
+        }
+
 
         if(!is_dir($apiConfigDir)) {
             // API Not found
             // TODO: log to admin log that API not found
-            HttpResp::text_out(404,"API $this->apiId not found");
+            HttpResp::text_out(404,"API configuration not found");
         }
 
         // load structure
@@ -176,7 +191,7 @@ class Dbapi extends CI_Controller
     {
         $this->_init();
         $this->load->helper("swagger");
-        $openApiSpec = generate_swagger($this->apiId,$this->apiDm->get_dataModel(),$this->config->item("base_domain"),"/v2");
+        $openApiSpec = generate_swagger($_SERVER["SERVER_NAME"],$this->apiDm->get_dataModel(),"/v2");
         HttpResp::json_out(200,$openApiSpec);
     }
 
@@ -366,8 +381,9 @@ class Dbapi extends CI_Controller
         }
 
         // get filter
-        if($filterStr=$this->input->get("filter"))
-            $opts["filter"] = get_filter($filterStr,$resName);
+        if($filterStr=$this->input->get("filter")) {
+            $opts["filter"] = get_filter($filterStr, $resName);
+        }
 
         // get sort
         if($sortQry=$this->input->get("sort"))
@@ -375,6 +391,8 @@ class Dbapi extends CI_Controller
 
         try {
             list($records,$totalRecords) = $this->recs->get_records($resName,$opts);
+            print_r($records);
+            die();
             $doc = \JSONApi\Document::singleton($records);
             $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$opts["offset"],"totalRecords"=>$totalRecords]));
 
@@ -629,8 +647,7 @@ class Dbapi extends CI_Controller
         $this->_init();
         HttpResp::json_out(200,[
             "meta"=>[
-                "apiId"=>$this->apiId,
-                "baseUrl"=>"https://".$this->apiId.$this->baseDomain."/v2"
+                "baseUrl"=>"https://".$_SERVER["SERVER_NAME"]."/v2"
             ],
             "jsonapi"=>[
                 "version"=>"1.1"
