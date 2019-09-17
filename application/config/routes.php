@@ -67,12 +67,46 @@ $blkOpsPath =  $basePath."\/b";
 //$stdOpsPath = "[0-9a-z]+\/$basePath";
 //$blkOpsPath =  "[0-9a-z]+\/".$basePath."\/b";
 
+
+$route["mamamia\/_rels"] = "dbapi/test/relation";
+$route["mamamia\/_rels\/([\w\-\_\%]+)"] = "dbapi/test/relation/$1";
+$route["mamamia\/([\w\-\_\%]+)"] = "dbapi/test/resource/$1";
+
+
 // API
 $route["^api/([\w\-\_]+)"] = "$controller/$1";
 
 // APIID/EP
 //$route["^api/([\w\-\_]+)/([\w\-\_]+)"] = "$controller/api/$1";
 
+
+/**
+/
+- POST: bulk_create_records
+- PATCH: bulk_update_records
+- DELETE: bulk_delete_records
+
+/resourceName**
+- GET: get_multiple_records
+- POST: create_single_record
+
+/resourceName/$id**
+- GET: get_single_record
+- PATCH: update_single_records
+- DELETE: update_single_records
+
+/resourceName/$id/__relationships/$relation**
+- GET: get_relationship
+- POST: create_relationship
+- PATCH: update_relationship
+- DELETE: delete_relationship
+
+/resourceName/$id/$relation**
+- GET: get_related_records
+*/
+$route["^$stdOpsPath"]["post"] ="$controller/create_multiple_records";
+$route["^$stdOpsPath"]["patch"] ="$controller/test";
+$route["^$stdOpsPath"]["delete"] ="$controller/test";
 
 // api/$apiId/$resName
 $route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/fetch_multiple/$1/$2";
@@ -97,8 +131,10 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["options"] = "$controller/
 
 
 // APIID/RESOURCE/ID/relationships/RELNAME
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3";
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\%_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3";
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\%_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3";
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["patch"] = "$controller/update_relationships/$1/$2/$3";
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["options"] = "$controller/options/$1/$2/$3";
+
 
 

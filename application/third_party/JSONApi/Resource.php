@@ -47,8 +47,8 @@ class Resource extends json_ready
             throw new \Exception("Invalid data parameter when creating a new Resource: not an object");
         if(!isset($data->type))
             throw new \Exception("Invalid data parameter when creating a new Resource: type property missing");
-        if(!isset($data->id))
-            throw new \Exception("Invalid data parameter when creating a new Resource: id property missing");
+//        if(!isset($data->id))
+//            throw new \Exception("Invalid data parameter when creating a new Resource: id property missing");
         if(!isset($data->attributes))
             throw new \Exception("Invalid data parameter when creating a new Resource: attributes property missing");
         if(!is_object($data->attributes))

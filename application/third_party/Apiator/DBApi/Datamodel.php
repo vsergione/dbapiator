@@ -145,7 +145,7 @@ class Datamodel {
      */
     function get_key_fld($resName)
     {
-        return $this->dataModel[$resName]["keyFld"];
+        return isset($this->dataModel[$resName]["keyFld"])?$this->dataModel[$resName]["keyFld"]:null;
     }
 
 

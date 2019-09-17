@@ -31,7 +31,7 @@ class Records {
      * @var \CI_DB_query_builder
      */
     private $dbdrv;
-    private $maxNoRels;
+    private $maxNoRels=10;
 
     /**
      * Records constructor.
@@ -213,12 +213,7 @@ class Records {
      */
     private function prepare_query(&$node, $start, &$select, &$join)
     {
-        try {
-            $id = $this->dm->get_key_fld($node["name"]);
-        }
-        catch (Exception $exception) {
-            $id = null;
-        }
+        $id = $this->dm->get_key_fld($node["name"]);
 
         $node["keyFld"] = $id;
         $node["offset"] = $start;
@@ -227,7 +222,10 @@ class Records {
             $node["select"] = $node["fields"];
         }
 
-        $node["select"][]=$id;
+        if($id)
+            $node["select"][]=$id;
+
+
         $node["select"] = array_unique($node["select"]);
         $node["noFlds"] = count($node["select"]);
 
@@ -257,6 +255,7 @@ class Records {
                 $start = $this->prepare_query($node["includes"][$key],$start,$select,$join);
         }
 
+
         return $start;
     }
 
@@ -269,7 +268,7 @@ class Records {
      */
     private function parse_result_row($node, $row,&$allRecs)
     {
-        $recId = $row[$node["keyFldPos"]+$node["offset"]];
+        $recId = !empty($node["keyFld"])?($row[$node["keyFldPos"]+$node["offset"]]):null;
         $rec = null;
 
         if($recId) {
@@ -396,7 +395,6 @@ class Records {
      */
     function get_records($resName,$opts=[])
     {
-
         //$resName, $includeStr, $fields, $filters, $offset, $limit, $order
         $defaultOpts = [
             "includeStr" => "",
@@ -407,6 +405,8 @@ class Records {
             "order"=>[]
         ];
         $opts = (object) array_merge($defaultOpts,$opts);
+        echo $resName;
+        print_r($opts);
 
         // check if resource exists (to save time)
         if(!$this->dm->resource_exists($resName))
@@ -452,7 +452,6 @@ class Records {
         $rows = $res->result_array_num();
 
         $allRecs = [];
-//        print_r($relTree);
         foreach ($rows as $row) {
             $newRec = $this->parse_result_row($relTree[$resName],$row,$allRecs);
             $recordSet[] = $newRec;

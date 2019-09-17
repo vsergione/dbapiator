@@ -367,6 +367,57 @@ function validate_post_data($data, $requiredAttributes=[]) {
     
 
 }
+/**
+ * validates $data as a JSON API document
+ * @param $data
+ * @param array $requiredAttributes
+ * @throws Exception
+ */
+function validate_post_data_single($data, $requiredAttributes=[]) {
+    if(!is_object($data))
+        throw new Exception("Invalid top level data: not an object",400);
+    if(!property_exists($data,"data"))
+        throw new Exception("Invalid input object: missing 'data' property",400);
+
+    if(!in_array(gettype($data),["array","object"])) {
+        throw new Exception("Invalid data. Must be array or object", 400);
+    }
+
+    $entries = !is_array($data->data)?[$data->data]:$data->data;
+
+    if($requiredAttributes!==[])
+        foreach($entries as $entry) {
+            is_valid_post_data_entry($entry,$requiredAttributes);
+        }
+
+
+}
+
+/**
+ * validates $data as a JSON API document
+ * @param $data
+ * @param array $requiredAttributes
+ * @throws Exception
+ */
+function validate_post_data_array($data, $requiredAttributes=[]) {
+    if(!is_object($data))
+        throw new Exception("Invalid top level data: not an object",400);
+
+    if(!property_exists($data,"data"))
+        throw new Exception("Invalid input object: missing 'data' property",400);
+
+    if(gettype($data)!=="array") {
+        throw new Exception("Invalid data. Must be an array", 400);
+    }
+
+    if($requiredAttributes!==[]) {
+        $entries = $data->data;
+
+        foreach ($entries as $entry) {
+            is_valid_post_data_entry($entry, $requiredAttributes);
+        }
+    }
+}
 
 /**
  * validates if $entry is a valid entry structure inside an JSONApi object
