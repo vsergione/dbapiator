@@ -65,7 +65,7 @@ $_schemas = [
             ]
         ]
     ],
-    "ResourceIdentifierObject"=>[
+    "GenericResourceIdentifierObject"=>[
         "type"=>"object",
         "properties"=>[
             "id"=>[
@@ -277,9 +277,9 @@ function delete_multiple_records()
                             "data"=>[
                                 "type"=>"array",
                                 "items"=>[
-                                    "\$ref"=>"#/components/schemas/GenericResourceObject"
+                                    "\$ref"=>"#/components/schemas/GenericResourceIdentifierObject"
                                 ],
-                                "minItems"=>1
+                                "minItems"=>0
 
                             ]
                         ],

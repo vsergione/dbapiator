@@ -39,4 +39,4 @@ $config["api_id"] = function() {
 
 
 // default recordset page size
-$config["default_page_limit"] = 10;
+$config["default_page_size_limit"] = 10;

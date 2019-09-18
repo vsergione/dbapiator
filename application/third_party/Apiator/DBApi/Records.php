@@ -268,26 +268,42 @@ class Records {
      */
     private function parse_result_row($node, $row,&$allRecs)
     {
-        $recId = !empty($node["keyFld"])?($row[$node["keyFldPos"]+$node["offset"]]):null;
         $rec = null;
+        $recId = null;
+        if(!empty($node["keyFld"])) {
+            // extract record ID from row
+            $idFldPosition = $node["keyFldPos"]+$node["offset"];
+            $recId = $row[$idFldPosition];
 
-        if($recId) {
+            // retrieve object from allRecs array (if already there)
             $objIdx = $node["name"] . "_" . $recId;
             if(isset($allRecs[$objIdx])) {
                 $rec = &$allRecs[$objIdx];
             }
         }
 
+
         if(is_null($rec)){
+            // record not yet saved in allRecs -> need to extract it
+
             $attributes = new \stdClass();
             $relationships = [];
 
+            // parse record and populate attributes or relationship
             for ($i = 0; $i < $node["noFlds"]; $i++) {
                 $fieldName = $node["select"][$i];
                 if(isset($node["fks"][$fieldName])) {
-                    $relationships[$fieldName] = new \stdClass();
-                    $relationships[$fieldName]->type = $node["fks"][$fieldName]["table"];
-                    $relationships[$fieldName]->id = $row[$node["offset"] + $i];
+                    $relationships[$fieldName] = (object)[
+                        "data"=>null,
+                        "type"=>"object"
+                    ];
+                    $fkId = $row[$node["offset"] + $i];
+                    if(!is_null($fkId))
+                        $relationships[$fieldName]->data = (object) [
+                            "id"=>$fkId,
+                            "type"=>$node["fks"][$fieldName]["table"]
+                        ];
+
                 }
                 else {
                     $attributes->$fieldName = $row[$node["offset"] + $i];
@@ -306,8 +322,9 @@ class Records {
 
             // add inbound
             foreach ($node["inbound"] as $label=>$spec) {
-                $rec->relationships->$label = [];
-                //if(isset($node["includes"$label)
+                $rec->relationships->$label = (object)[
+                    "type"=>"array"
+                ];
             }
 
 
@@ -325,17 +342,28 @@ class Records {
             if(is_null($rec->relationships->$fk))
                 continue;
             if($incNode["type"]=="1:1") {
-                $rec->relationships->$fk = $this->parse_result_row($incNode, $row, $allRecs);
+                $inboundRelation = $this->parse_result_row($incNode, $row, $allRecs);
+                $rec->relationships->$fk = (object) [
+                        "data"=>$inboundRelation,
+                        "type"=>"object"
+                    ];
             }
+
             if($incNode["type"]=="1:n") {
                 $filterStr = $incNode["field"]."=".$rec->id;
                 $filter = get_filter($filterStr,$incNode["table"]);
 
-                list($recsss,$total) = $this->get_records($incNode["table"],[
+                $rec->relationships->$fk = (object)[
+                    "data"=>[],
+                    "total"=>0,
+                    "type"=>"array"
+
+                ];
+
+                list($rec->relationships->$fk->data,$rec->relationships->$fk->total) = $this->get_records($incNode["table"],[
                     "filter"=>$filter,
                     "limit"=>$this->maxNoRels
                 ]);
-                $rec->relationships->$fk = $recsss;
             }
         }
         return $rec;
@@ -381,83 +409,99 @@ class Records {
     }
 
     /**
-     * @param string $resName
+     * Inner workings:
+     * 1. basic checks (resource exists & is readable)
+     * 2. prepare query parameters
+     * 3. find out total number of matched records
+     * 4. prepare fields selection
+     * 5. generate SQL parts
+     * 6. create ORDER BY
+     * 7. compile SELECT statement
+     * 8. run query
+     * 9. parse result
+     *
+     * @param string $tableName
      * @param array $opts [
-            "includeStr" => "",
-            "fields" => [],
-            "filters"=>[],
-            "offset"=>0,
-            "limit"=>0,
-            "order"=>[]
-        ]
+            * "includeStr" => "",
+            * "fields" => [],
+            * "filters"=>[],
+            * "offset"=>0,
+            * "limit"=>0,
+            * "order"=>[]
+        * ]
      * @return array
      * @throws \Exception
      */
-    function get_records($resName,$opts=[])
+    function get_records($tableName, $opts=[])
     {
-        //$resName, $includeStr, $fields, $filters, $offset, $limit, $order
+        // check if resource exists
+        if(!$this->dm->resource_exists($tableName))
+            throw new \Exception("Resource '$tableName' not found",404);
+
+        // check if client is authorized
+        if(!$this->dm->resource_allow_read($tableName))
+            throw new \Exception("Not authorized to read from '$tableName''",403);
+
+        // prepare parameters
         $defaultOpts = [
             "includeStr" => "",
             "fields" => [],
             "filter"=>[],
             "offset"=>0,
-            "limit"=>get_instance()->config->item("default_page_limit"),
+            "limit"=>get_instance()->config->item("default_page_size_limit"),
             "order"=>[]
         ];
         $opts = (object) array_merge($defaultOpts,$opts);
-        echo $resName;
-        print_r($opts);
 
-        // check if resource exists (to save time)
-        if(!$this->dm->resource_exists($resName))
-            throw new \Exception("Resource '$resName' not found",404);
+        $whereStr = $this->get_where_str($opts->filter,$tableName);
 
-        // check if client is authorized
-        if(!$this->dm->resource_allow_read($resName))
-            throw new \Exception("Not authorized to read from '$resName''",401);
-
-        $whereStr = $this->get_where_str($opts->filter,$resName);
-        $countSql = "SELECT count(*) as cnt FROM $resName WHERE $whereStr";
-
+        // extract total number of records matched by the query
+        $countSql = "SELECT count(*) as cnt FROM $tableName WHERE $whereStr";
         $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
 
-        $recordSet = [];
-        if($totalRecs==0)
-            return [$recordSet,0];
+        // return if no records matched
+        if($totalRecs==0) return [[],0];
 
+        $recordSet = [];
+        // prepare field selection (validate and ....
         foreach ($opts->fields as $res=>$fldsStr) {
             $opts->fields[$res] = [];
             $tmp = explode(",",$fldsStr);
             foreach ($tmp as $fld) {
                 if($this->dm->is_valid_field($res,$fld))
                     $opts->fields[$res][] = $fld;
+                else
+                    throw new \Exception("Invalid field name $res.$fld",401);
             }
             if(empty($opts->fields[$res]))
                 unset($opts->fields[$res]);
         }
 
-        list($select,$join,$relTree) = $this->generate_sql_parts($resName,$opts->includeStr,$opts->fields);
+        // generate SQL parts & relation tree
+        list($select,$join,$relTree) = $this->generate_sql_parts($tableName,$opts->includeStr,$opts->fields);
+        // prepare ORDER BY part
+        $orderStr = $this->get_sort_str($opts->order,$tableName);
 
-
-        $orderStr = $this->get_sort_str($opts->order,$resName);
-        $mainSql = "SELECT $select FROM {$relTree[$resName]["name"]} AS {$relTree[$resName]["alias"]} "
+        // compile SELECT
+        $mainSql = "SELECT $select FROM {$relTree[$tableName]["name"]} AS {$relTree[$tableName]["alias"]} "
             .($join!==""?$join:"")
             ." WHERE $whereStr"
             ." ORDER BY $orderStr"
             ." LIMIT $opts->offset, $opts->limit";
-
-        /** @var \CI_DB_result $res */
         //echo $mainSql."\n";
+
+
+        // run query
+        /** @var \CI_DB_result $res */
         $res = $this->dbdrv->query($mainSql);
         $rows = $res->result_array_num();
 
+        // parse result
         $allRecs = [];
         foreach ($rows as $row) {
-            $newRec = $this->parse_result_row($relTree[$resName],$row,$allRecs);
+            $newRec = $this->parse_result_row($relTree[$tableName],$row,$allRecs);
             $recordSet[] = $newRec;
         }
-//        print_r($relTree);
-//        print_r($recordSet);
 
         return [$recordSet,$totalRecs];
 

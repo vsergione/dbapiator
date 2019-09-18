@@ -159,6 +159,7 @@ class Dbapi extends CI_Controller
 
     /**
      * debug function: shows datamodel
+     * final
      */
     function dm()
     {
@@ -167,40 +168,40 @@ class Dbapi extends CI_Controller
 
     /**
      * generates OpenAPI swagger file in JSON format
+     * final
      */
     function swagger()
     {
-
         $this->load->helper("swagger");
         $openApiSpec = generate_swagger($_SERVER["SERVER_NAME"],$this->apiDm->get_dataModel(),"/v2");
         HttpResp::json_out(200,$openApiSpec);
     }
 
 
-
-
     /**
-     *
+     * Creates multiple records with a single call
+     * @todo to be implemented
      */
     function create_multiple_records()
     {
-        // todo: finish it
+
         print_r($this->inputData);
     }
 
     /**
-     * Update multiple records with a single call
+     * Update multiple records of different types with a single call
      * @param $resourceName
      * @throws Exception
+     * @todo to be implemented
      */
-    function update_multiple_records()
+    function update_multiple_records($resourceName)
     {
         // todo: finish it
         // extract data from RequestBody
 
         // & validate it
         try{
-            validate_post_data_array($inputData);
+            validate_post_data_array($this->inputData);
         }
         catch (Exception $exception) {
             $errors = JSONApi\Error::from_exception($exception);
@@ -210,7 +211,7 @@ class Dbapi extends CI_Controller
         }
 
         $maxBulkUpdateRecords = $this->config->item("bulk_update_limit");
-        $newRecords = $inputData->data;
+        $newRecords = $this->inputData->data;
 
         $ids = [];
         $exceptions = [];
@@ -220,7 +221,7 @@ class Dbapi extends CI_Controller
             }
 
             try {
-                $ids[] = $this->update($resourceName, $item->id, $item);
+                $ids[] = $this->update_single_record($item->type, $item->id, $item);
             }
             catch (Exception $e) {
                 $exceptions[] = new Exception("Failed to update record number $idx: ".$e->getMessage(),$e->getCode());
@@ -235,15 +236,7 @@ class Dbapi extends CI_Controller
         }
 
         $doc = \JSONApi\Document::singleton([]);
-        if(count($ids)) {
-            $filterStr = $this->apiDm->get_key_fld($resourceName)."><".implode(";",$ids);
-            $filter = get_filter($filterStr,$resourceName);
 
-            $recs = $this->recs->get_records($resourceName,[
-                "filter"=>$filter
-            ]);
-            $doc = \JSONApi\Document::singleton($recs[0]);
-        }
         if(count($exceptions)) {
             foreach ($exceptions as $exception) {
                 $doc->addError(\JSONApi\Error::from_exception($exception));
@@ -254,6 +247,24 @@ class Dbapi extends CI_Controller
 
     }
 
+
+    /**
+     * @param $tableName
+     * @todo to be implemented
+     */
+    function delete_multiple_records($tableName)
+    {
+        HttpResp::method_not_allowed();
+
+        // check if table exists
+        if (!$this->apiDm->resource_exists($tableName)) {
+            HttpResp::not_found();
+            exit();
+        }
+
+    }
+
+
     /**
      * update one record
      * @param string $resourceName
@@ -261,14 +272,15 @@ class Dbapi extends CI_Controller
      * @param null $updateData
      * @return Exception|string
      * @throws Exception
+     * @todo validate it
      */
-    function update($resourceName, $recId, $updateData=null)
+    function update_single_record($resourceName, $recId, $updateData=null)
     {
         $internal = true;
 
-        // POST data validation
+        // input data validation
         if(is_null($updateData)) {
-            $postData = json_decode($this->input->raw_input_stream);
+            $postData = $this->inputData;
 
             try {
                 validate_post_data($postData);
@@ -342,55 +354,72 @@ class Dbapi extends CI_Controller
 
 
     /**
-     * extracts various query parameters, formats and returns them as an array.
-     * Full list of valid parameters is
-     * - include
-     * - fields
-     * - filter
-     * - page[offset]
-     * - page[limit]
-     * - sort
-     * - onduplicate
+     * extracts query parameters and returns them as an array:
+     * - include: comma separated list of related resources to include
+     * - fields[resourceName]: comma separated list of fields to include from the specified resourceName
+     * - filter: filtering criteria @todo write more details
+     * - page[offset]: page offset
+     * - page[limit]: page size
+     * - sort: comma separated list of sorting conditions
+     * - onduplicate: parameter describing the behaviour when a duplicate key occurs when inserting (or updating); possible values: ignore, update, error
+     * - update: comma separated list of fields to update when onduplicate=update.
      * - _jwt
      * - api_key
      * @return array
+     *
+     * @
      */
     private function get_query_paras($resName)
     {
-        $opts = [];
+        $queryParas = [];
+
         // get include
         if($this->input->get("include")) {
-            $opts["includeStr"] = $this->input->get("include");
+            $queryParas["includeStr"] = $this->input->get("include");
         }
 
         // get sparse fieldset fields
         if($flds = $this->input->get("fields")) {
             if(is_array($flds))
-                $opts["fields"] = $flds;
+                $queryParas["fields"] = $flds;
         }
 
-        // get paging parameters
-        $opts["offset"] = 0;
+        // extract paging parameters
+        $queryParas["offset"] = 0;
         if($page = $this->input->get("page")) {
             // get offset
-            if(isset($page["offset"]))
-                $opts["offset"] = intval($page["offset"]);
+            if(isset($page["offset"]) && preg_match("/^\d+$/",$page["offset"]))
+                $queryParas["offset"] = intval($page["offset"]);
+            else
+                $queryParas["offset"] = 0;
 
             // get limit
-            if(isset($page["limit"]) && intval($page["limit"]))
-                $opts["limit"] = intval($page["limit"]);
+            if(isset($page["limit"])  && preg_match("/^\d+$/",$page["limit"]))
+                $queryParas["limit"] = intval($page["limit"]);
         }
 
         // get filter
         if($filterStr=$this->input->get("filter")) {
-            $opts["filter"] = get_filter($filterStr, $resName);
+            $queryParas["filter"] = get_filter($filterStr, $resName);
         }
 
         // get sort
         if($sortQry=$this->input->get("sort"))
-            $opts["order"] = get_sort($sortQry,$resName);
+            $queryParas["order"] = get_sort($sortQry,$resName);
 
-        return $opts;
+
+        // get onduplicate behaviour and fields to update
+        if($ondupe=$this->input->get("onduplicate")) {
+            if(!in_array($ondupe,["update","ignore","error"]))
+                $ondupe = "error";
+            $queryParas["onduplicate"] = $ondupe;
+
+            if($ondupe=="update" && $updateFields=$this->input->get("update") && is_array($updateFields)) {
+                $queryParas["update"] = $updateFields;
+            }
+        }
+
+        return $queryParas;
     }
 
     /**
@@ -398,14 +427,16 @@ class Dbapi extends CI_Controller
      * processes a GET requests for /api/$apiId/$resName
      * @param string $resName
      */
-    function fetch_multiple($resName)
+    function get_multiple_records($resName)
     {
-        $opts = $this->get_query_paras($resName);
+        $queryParas = $this->get_query_paras($resName);
 
         try {
-            list($records,$totalRecords) = $this->recs->get_records($resName,$opts);
+            list($records,$totalRecords) = $this->recs->get_records($resName,$queryParas);
+            //print_r($records);
+
             $doc = \JSONApi\Document::singleton($records);
-            $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$opts["offset"],"totalRecords"=>$totalRecords]));
+            $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$queryParas["offset"],"totalRecords"=>$totalRecords]));
 
 
             HttpResp::json_out(200, $doc->json_data());
@@ -634,7 +665,6 @@ class Dbapi extends CI_Controller
                     ]);
                 $totalRecords += $noRecs;
                 $insertedRecords = array_merge_recursive($insertedRecords,$records);
-                //die();
 
             }
             catch (Exception $exception)
@@ -674,21 +704,7 @@ class Dbapi extends CI_Controller
         }
     }
 
-    /**
-     * @param $tableName
-     * TODO: finish it
-     */
-    function bulk_delete($tableName)
-    {
-        HttpResp::method_not_allowed();
 
-        // check if table exists
-        if (!$this->apiDm->resource_exists($tableName)) {
-            HttpResp::not_found();
-            exit();
-        }
-
-    }
 
 
 

@@ -161,7 +161,8 @@ class Resource extends json_ready
 
         if(!isset($this->relationships->$name)) {
             $this->relationships->$name = Relationship::factory($data,Links::factory([
-                "self"=>Document::singleton()->get_baseUrl()."/".$this->type."/".$this->id."/relationships/".$name
+                "self"=>Document::singleton()->get_baseUrl()."/".$this->type."/".$this->id."/relationships/".$name,
+                "related"=>Document::singleton()->get_baseUrl()."/".$this->type."/".$this->id."/".$name
             ]));
         }
 
