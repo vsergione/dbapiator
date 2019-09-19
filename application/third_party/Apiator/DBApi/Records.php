@@ -400,7 +400,7 @@ class Records {
         foreach ($order as $item) {
             if($item->alias!==$resName)
                 continue;
-            if(!$this->dm->field_is_sortable($item->alias))
+            if(!$this->dm->field_is_sortable($item->alias,$item->fld))
                 continue;
 
             $orderByArr[] = sprintf("%s.%s %s",$resName,$item->fld,$item->dir);
@@ -409,6 +409,8 @@ class Records {
     }
 
     /**
+     * Retrieves records from a database.
+     *
      * Inner workings:
      * 1. basic checks (resource exists & is readable)
      * 2. prepare query parameters
@@ -431,6 +433,8 @@ class Records {
         * ]
      * @return array
      * @throws \Exception
+     * @todo: check filtering
+     *
      */
     function get_records($tableName, $opts=[])
     {

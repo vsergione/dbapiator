@@ -41,6 +41,9 @@ class Dbapi extends CI_Controller
      * @var mixed
      */
     private $inputData;
+    private $baseUrl = "https://dbapi.apiator/api/5cbaed2eb9a51";
+    private $nolinks = true;
+    private $JsonApiDocOptions = ["nolinks"=>true];
 
     function __construct ()
     {
@@ -83,6 +86,9 @@ class Dbapi extends CI_Controller
                 HttpResp::server_error("Invalid deployment type");
 
         }
+
+        $this->baseUrl = "https://".$_SERVER["SERVER_NAME"]."/v2";
+        $this->JsonApiDocOptions["baseUrl"] = $this->baseUrl;
 
 
         if(!is_dir($apiConfigDir)) {
@@ -206,7 +212,7 @@ class Dbapi extends CI_Controller
         catch (Exception $exception) {
             $errors = JSONApi\Error::from_exception($exception);
             HttpResp::json_out(400,
-                JSONApi\Document::error_doc($errors)->json_data()
+                JSONApi\Document::error_doc($this->JsonApiDocOptions,$errors)->json_data()
             );
         }
 
@@ -235,7 +241,8 @@ class Dbapi extends CI_Controller
 
         }
 
-        $doc = \JSONApi\Document::singleton([]);
+        $options = [];
+        $doc = \JSONApi\Document::singleton($options,[]);
 
         if(count($exceptions)) {
             foreach ($exceptions as $exception) {
@@ -285,7 +292,7 @@ class Dbapi extends CI_Controller
             try {
                 validate_post_data($postData);
             } catch (Exception $exception) {
-                HttpResp::jsonapi_out($exception->getCode(), \JSONApi\Document::from_exception($exception));
+                HttpResp::jsonapi_out($exception->getCode(), \JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
 
             }
             $updateData = $postData->data;
@@ -296,7 +303,7 @@ class Dbapi extends CI_Controller
             $exception = new Exception("Invalid data attribute type: must be an object",400);
             if($internal)
                 throw $exception;
-            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
         // validate if data type is same as the end point type
@@ -304,7 +311,7 @@ class Dbapi extends CI_Controller
             $exception = new Exception("Object type mismatch; '$updateData->type' instead of '$resourceName' ",400);
             if($internal)
                 throw $exception;
-            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
         // validate if record ID from input matches the one from URL
@@ -312,7 +319,7 @@ class Dbapi extends CI_Controller
             $exception = new Exception("Record ID mismatch",400);
             if($internal)
                 throw $exception;
-            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
         // check if resource has primary key
@@ -321,7 +328,7 @@ class Dbapi extends CI_Controller
             $exception = new Exception("Cannot update by id: resource is not configured with a primary key",400);
             if($internal)
                 throw $exception;
-            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
         // check if record exists
@@ -333,7 +340,7 @@ class Dbapi extends CI_Controller
             $exception = new Exception("Record not $recId of type '$resourceName' not found",404);
             if($internal)
                 throw $exception;
-            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
         // perform update
@@ -346,7 +353,7 @@ class Dbapi extends CI_Controller
         catch (Exception $exception) {
             if($internal)
                 throw $exception;
-            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
 
@@ -414,7 +421,8 @@ class Dbapi extends CI_Controller
                 $ondupe = "error";
             $queryParas["onduplicate"] = $ondupe;
 
-            if($ondupe=="update" && $updateFields=$this->input->get("update") && is_array($updateFields)) {
+            $updateFields=$this->input->get("update");
+            if($ondupe=="update" && $updateFields && is_array($updateFields)) {
                 $queryParas["update"] = $updateFields;
             }
         }
@@ -435,14 +443,16 @@ class Dbapi extends CI_Controller
             list($records,$totalRecords) = $this->recs->get_records($resName,$queryParas);
             //print_r($records);
 
-            $doc = \JSONApi\Document::singleton($records);
+            $options = ["nolinks"=>$this->nolinks,"baseUrl"=>$this->baseUrl];
+            $doc = \JSONApi\Document::singleton($options,$records);
             $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$queryParas["offset"],"totalRecords"=>$totalRecords]));
+            //print_r($doc);
 
 
             HttpResp::json_out(200, $doc->json_data());
         }
         catch (Exception $exception) {
-            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
         }
     }
 
@@ -452,7 +462,7 @@ class Dbapi extends CI_Controller
      * @param $resName
      * @param $recId
      */
-    function fetch_single($resName, $recId)
+    function get_single_record($resName, $recId)
     {
         $keyFld = $this->apiDm->get_key_fld($resName);
         if(is_null($keyFld))
@@ -465,19 +475,21 @@ class Dbapi extends CI_Controller
 
         // fetch records
         try {
+
             list($records,$totalRecords) = $this->recs->get_records($resName,$opts);
 
+            $options = ["nolinks"=>$this->nolinks,"baseUrl"=>$this->baseUrl];
             if(!$totalRecords) {
-                $doc = \JSONApi\Document::not_found("Not found",404);
+                $doc = \JSONApi\Document::not_found($this->JsonApiDocOptions,"Not found",404);
                 HttpResp::json_out(200, $doc->json_data());
             }
 
             //$resource = \JSONApi\Resource::factory()
-            $doc = \JSONApi\Document::singleton($records[0])->json_data();
+            $doc = \JSONApi\Document::singleton($this->JsonApiDocOptions,$records[0])->json_data();
             HttpResp::json_out(200,$doc);
         }
         catch (Exception $exception) {
-            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
         }
     }
 
@@ -515,7 +527,7 @@ class Dbapi extends CI_Controller
             $relRes = $relSpec["table"];
         }
         catch (Exception $exception) {
-            $doc = \JSONApi\Document::from_exception($exception);
+            $doc = \JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception);
             HttpResp::json_out($exception->getCode(), $doc->json_data());
         }
 
@@ -538,7 +550,7 @@ class Dbapi extends CI_Controller
                 $fkId = $parent->relationships->$relationName->id;
         }
         catch (Exception $exception) {
-            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
         }
 
         if($relationType=="inbound") {
@@ -567,7 +579,7 @@ class Dbapi extends CI_Controller
             $relRes = $relSpec["table"];
         }
         catch (Exception $exception) {
-            $doc = \JSONApi\Document::from_exception($exception);
+            $doc = \JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception);
             HttpResp::json_out($exception->getCode(), $doc->json_data());
         }
 
@@ -590,7 +602,7 @@ class Dbapi extends CI_Controller
                 $fkId = $parent->relationships->$relationName->id;
         }
         catch (Exception $exception) {
-            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
         }
 
         if($relationType=="inbound") {
@@ -620,7 +632,7 @@ class Dbapi extends CI_Controller
         }
         catch (Exception $exception) {
             // TODO: log validation data, eventualy provide extra validation info....
-            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($exception));
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
 
         }
 
@@ -670,7 +682,7 @@ class Dbapi extends CI_Controller
             catch (Exception $exception)
             {
                 $this->apiDb->trans_rollback();
-                HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+                HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
             }
         }
 
@@ -678,14 +690,15 @@ class Dbapi extends CI_Controller
         //return [$insertedRecords,$totalRecords];
 
         if($totalRecords) {
+            $options = [];
             if (is_object($postData->data))
-                $doc = \JSONApi\Document::singleton($insertedRecords[0])->json_data();
+                $doc = \JSONApi\Document::singleton($options,$insertedRecords[0])->json_data();
             else
-                $doc = \JSONApi\Document::singleton($insertedRecords)->json_data();
+                $doc = \JSONApi\Document::singleton($options,$insertedRecords)->json_data();
             HttpResp::json_out(200, $doc);
         }
         $err = \JSONApi\Error::factory(["code"=>400,"title"=>"No records inserted due to invalid input data"]);
-        HttpResp::jsonapi_out(400,\JSONApi\Document::error_doc($err));
+        HttpResp::jsonapi_out(400,\JSONApi\Document::error_doc($this->JsonApiDocOptions,$err));
     }
 
     /**
@@ -700,7 +713,7 @@ class Dbapi extends CI_Controller
             HttpResp::no_content(204);
         }
         catch (Exception $exception) {
-            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($exception)->json_data());
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
         }
     }
 

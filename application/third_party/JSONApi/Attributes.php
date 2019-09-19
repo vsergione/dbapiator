@@ -17,7 +17,7 @@ class Attributes extends json_ready
     /**
      * @var object
      */
-    protected $attributes;
+    private $attributes;
 
     static function factory($attributes)
     {

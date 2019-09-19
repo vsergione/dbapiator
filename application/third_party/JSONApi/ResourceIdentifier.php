@@ -24,6 +24,8 @@ class ResourceIdentifier extends json_ready
      */
     protected $meta;
 
+
+
     /**
      * @param $data
      * @return ResourceIdentifier
@@ -39,6 +41,7 @@ class ResourceIdentifier extends json_ready
             return null;
 
         $ri = new self($data->type,$data->id);
+
         if(isset($data->attributes)) {
             $res = Resource::factory($data);
             Document::singleton()->addInclude($res);
@@ -60,6 +63,9 @@ class ResourceIdentifier extends json_ready
 
     function json_data ()
     {
+        if(property_exists($this,"meta") && empty($this->meta))
+            unset($this->meta);
+
         return parent::json_data();
     }
 }
