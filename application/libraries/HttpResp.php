@@ -280,10 +280,10 @@ class HttpResp{
      * @param string|array|object $body
      * @param array|string $headers assoc array of key->value or string containing header string
      */
-    static function json_out($statusCode, $body=null, $headers=null)
+    static function json_out($statusCode, $body=null, $headers=null,$jsonOptions=JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
     {
         if(is_array($body) || is_object($body))
-            $body = json_encode($body,JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+            $body = json_encode($body,$jsonOptions);
 
         HttpResp::ctype_out($statusCode,"application/json",$body,$headers);
     }

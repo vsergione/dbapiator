@@ -44,7 +44,7 @@ class ResourceIdentifier extends json_ready
 
         if(isset($data->attributes)) {
             $res = Resource::factory($data);
-            Document::singleton()->addInclude($res);
+            Document::create()->addInclude($res);
         }
         return $ri;
     }

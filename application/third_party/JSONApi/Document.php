@@ -15,8 +15,9 @@ namespace JSONApi;
  */
 class Document extends  json_ready
 {
-
-    private $apiBaseUrl;
+    /**
+     * @var Document static variable to store the single Document instance
+     */
     protected static $doc;
     private $baseUrl = "https://dbapi.apiator/api/5cbaed2eb9a51";
 
@@ -52,7 +53,8 @@ class Document extends  json_ready
 
 
     /**
-     * @param array $options
+     * singleton method to create a JSONAPI document
+     * @param array $options JSONAPI options: (bool) nolinks, (string) baseUrl
      * @param array|null $data
      * @param Meta|null $meta
      * @param array|null $errors
@@ -60,7 +62,7 @@ class Document extends  json_ready
      * @return Document
      * @throws \Exception
      */
-    static function singleton($options=[],$data=null, Meta $meta=null, array $errors=[], Links $links=null)
+    static function create($options=[], $data=null, Meta $meta=null, array $errors=[], Links $links=null)
     {
         if(isset(self::$doc))
             return self::$doc;
@@ -275,7 +277,7 @@ class Document extends  json_ready
      */
     static function not_found($options,$title,$code)
     {
-        return self::singleton($options)->addError(Error::factory(
+        return self::create($options)->addError(Error::factory(
             [
                 "title" => $title,
                 "code" => $code

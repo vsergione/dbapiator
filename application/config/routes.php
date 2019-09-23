@@ -102,6 +102,8 @@ $route["^api/([\w\-\_]+)"] = "$controller/$1";
 
 $route["^swagger"] ="$controller/swagger";
 $route["^dm"] ="$controller/dm";
+$route["^test"] ="$controller/test";
+$route["^test\/(.*)"] ="$controller/test/$1";
 
 
 
@@ -115,18 +117,20 @@ $route["^$stdOpsPath"]["delete"] ="$controller/delete_multiple_records";
 
 
 // second family: /resourceŃame
-// #4
+// #4 OK
 $route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/get_multiple_records/$1";
 // #5
 $route["^$stdOpsPath\/([\w\-\_\%]+)"]["post"] = "$controller/create_single_record/$1";
 
+
 // third family: /resourceName/id
-// #6
+// #6 OK
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/get_single_record/$1/$2";
 // #7
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/update_single_record/$1/$2";
 // #8
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["delete"] = "$controller/delete_single_record/$1/$2";
+
 
 // third family: /resourceName/id/_relationships/relation
 // #9
@@ -138,9 +142,10 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+
 // #12
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["delete"] = "$controller/delete_relationship/$1/$2/$3";
 
+
 // fourth family: /resourceName/id/relation
 // #13
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/delete_relationship/$1/$2/$3";
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/get_related/$1/$2/$3";
 
 
 //

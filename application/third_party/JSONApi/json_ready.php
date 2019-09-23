@@ -19,7 +19,7 @@ abstract class json_ready
     function json_data()
     {
         $return = [];
-        $options = Document::singleton()->options;
+        $options = Document::create()->options;
         foreach ($this as $label=>$data) {
 
             //echo "$label - ".get_class($this)."\n";

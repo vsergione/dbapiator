@@ -10,6 +10,8 @@ require_once(__DIR__."/../../../libraries/Errors.php");
 require_once(__DIR__.'/../../../libraries/RecordSet.php');
 
 $req = require_once (APPPATH."/third_party/JSONApi/Autoloader.php");
+
+use http\Exception;
 use JSONApi\Autoloader;
 Autoloader::register();
 
@@ -22,13 +24,15 @@ use JSONApi\Document;
  * core class for manipulating the records in the Database
  */
 class Records {
+
+    private $debug = true;
     /**
-     * @var \Apiator\DBApi\Datamodel
+     * @var \Apiator\DBApi\Datamodel $dm
      */
     private $dm;
 
     /**
-     * @var \CI_DB_query_builder
+     * @var \CI_DB_query_builder $dbdrv
      */
     private $dbdrv;
     private $maxNoRels=10;
@@ -133,6 +137,7 @@ class Records {
      *
      * @param array $parent
      * @param array $include include path as array, where lower indices are parents of higher ones
+     * @param $fields
      * @throws \Exception
      */
     private function process_includes(&$parent, $include,$fields)
@@ -462,6 +467,7 @@ class Records {
         // extract total number of records matched by the query
         $countSql = "SELECT count(*) as cnt FROM $tableName WHERE $whereStr";
         $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
+        get_instance()->debug_log($countSql);
 
         // return if no records matched
         if($totalRecs==0) return [[],0];
@@ -498,6 +504,8 @@ class Records {
         // run query
         /** @var \CI_DB_result $res */
         $res = $this->dbdrv->query($mainSql);
+        get_instance()->debug_log($mainSql);
+
         $rows = $res->result_array_num();
 
         // parse result
@@ -511,189 +519,45 @@ class Records {
 
     }
 
-    /**
-     * @param string $resName
-     * @param array $includes
-     * @param array $fields
-     * @param array $filters
-     * @param int $offset
-     * @param int $limit
-     * @param array $order
-     * @return \RecordSet
+    private /**
+     * @param $resName
+     * @param $attributes
+     * @param string $operation
+     * @return mixed
+     * TODO: review this method
      * @throws \Exception
      */
-    function get_records_old($resName, $includes, $fields, $filters, $offset=0, $limit=10, $order=[]) {
-        //echo "get records";
-        // validate main inputs
+    function validate_insert_data($resName, $attributes) {
+        $attributesNames = array_keys($attributes);
 
-        //$queryFromArr = [$table];
-        $includedFields = [];
-        $includedFields[$resName] = [];
+        foreach($this->dm->get_fields($resName) as $fldName=>$fldSpec) {
+            if($fldSpec["required"] && is_null($fldSpec["default"]) && !in_array($fldName,$attributesNames))
+                throw new \Exception("Required attribute '$fldName' not provided",400);
 
-        $from = [
-            "table"=>$resName,
-            "fields"=> [],
-            "order"=> [],
-            "where"=> []
-        ];
-
-
-        // generate join & partially the fields Arr
-        $joinArr = [];
-        foreach ($includes as $include) {
-            // get relation
-            try {
-                $rel = $this->dm->get_outbound_relation($resName, $include);
-            }
-            catch (\Exception $exception) {
-                $rel = null;
-            }
-
-            if($rel) {
-                $alias = sprintf("%s_%s",$include,$rel["table"]);
-                $joinArr[$include] = [
-                    "table" => $rel["table"],
-                    "alias"=> $alias,
-                    "left"=>$alias.".".$rel["field"],
-                    "right"=>$resName.".".$include,
-                    "fields"=> [],
-                    "order"=> [],
-                    "where"=> [],
-                    "fkFLd"=>$rel["field"]
-                ];
-
-                // add selected fields of included resources for the SELECT part
-                if(isset($fields[$include])) {
-                    foreach ($fields[$include] as $fld) {
-                        if ($this->dm->is_valid_field($rel["table"], $fld)) {
-                            array_push($joinArr[$include]["fields"], $fld);
-                        }
-                    }
-                }
-
-                // when no fields specified, make sure to add *
-                if(empty($joinArr[$include]["fields"]))
-                    array_push($joinArr[$include]["fields"],"*");
-                // if there are fields specified make sure that the fkField is included
-                elseif (!in_array($joinArr[$include]["fkFLd"],$joinArr[$include]["fields"]))
-                    array_push($joinArr[$include]["fields"],$joinArr[$include]["fkFLd"]);
-            }
-
+            // field not allowed to insert
+            if(in_array($fldName,$attributesNames) && !$fldSpec["insert"])
+                throw new \Exception("Attribute '$fldName' not allowed to be inserted",400);
         }
 
-        // take care  of the FROM part
-        if(isset($fields[$resName])) {
-            foreach ($fields[$resName] as $fld)
-                if ($this->dm->is_valid_field($resName, $fld))
-                    array_push($from["fields"], $fld);
+        foreach($attributes as $attrName=> $attrVal) {
+            $attrVal = $this->dm->is_valid_value($resName,$attrName,$attrVal);
+
+            /**
+             * TODO: instead of just checking if value is an object as exception when value type validation fails
+             *       implement a proper mechanism inside the is_valid_value method
+             */
+            if(!is_object($attrVal))
+                $attributes[$attrName] = $attrVal;
         }
-
-        if(empty($from["fields"])) {
-            array_push($from["fields"], "*");
-        }
-        else {
-            $primaryKey = $this->dm->get_key_fld($resName);
-            if($primaryKey && !in_array($primaryKey,$from["fields"]))
-                array_push($from["fields"],$primaryKey );
-            $from["fields"] = array_merge($from["fields"],array_keys($joinArr));
-            $from["fields"] = array_unique($from["fields"]);
-        }
-
-
-        // generate ORDER BY array
-        $orderByArr = [];
-        foreach ($order as $item) {
-            if($item->alias==$resName && $this->dm->is_valid_field($resName,$item->fld))
-                $orderByArr[] = sprintf("%s.%s %s",$resName,$item->fld,$item->dir);
-            if(isset($joinArr[$item->alias]) && $this->dm->is_valid_field($joinArr[$item->alias]["table"],$item->fld))
-                $orderByArr[] = sprintf("%s.%s %s",$joinArr[$item->alias]["alias"],$item->fld,$item->dir);
-        }
-
-
-        // generate $whereArr
-        $whereArr = [];
-        foreach ($filters as $filter) {
-            if($filter->left->alias==$resName
-                && $this->dm->field_is_searchable($resName,$filter->left->field)) {
-                $whereArr[] = generate_where_str($filter);
-
-            }
-            elseif(isset($joinArr[$filter->left->alias])
-                && $this->dm->field_is_searchable($joinArr[$filter->left->alias]["table"],$filter->left->field)) {
-                $filter->left->alias = $joinArr[$filter->left->alias]["alias"];
-                $whereArr[] = generate_where_str($filter);
-            }
-        }
-
-        //list($totalRecs,$res) = $this->select_query($from,$joinArr,$whereArr,$orderByArr,$offset,$limit);
-        list($countSql,$mainSql) = render_select_query($from,$joinArr,$whereArr,$orderByArr,$offset,$limit);
-
-        $res = $this->dbdrv->query($countSql);
-
-        //echo $this->dbdrv->last_query();
-        $totalRecs = $res->row()->cnt;
-        if($totalRecs===0)
-            $mainSql = "SELECT 1 from DUAL where false";
-
-        $res = $this->dbdrv->query($mainSql);
-        //echo $this->dbdrv->last_query();
-
-        $recordSet = new \RecordSet([],$resName,$this->dm->get_idfld($resName), $offset,$totalRecs);
-
-        if($from["fields"][0]=="*") {
-            $from["fields"] = array_keys($this->dm->get_fields($from["table"]));
-        }
-
-        foreach ($joinArr as $fld=>$join) {
-            if($join["fields"][0]=="*") {
-                $joinArr[$fld]["fields"] = array_keys((array) $this->dm->get_fields($join["table"]));
-            }
-        }
-
-        $resArray = $res->result_array_num();
-        //print_r($joinArr);
-
-        foreach ($resArray as $row) {
-            // separate the main table fields from the fields of the joined  tables
-            $mainTableFlds = [];
-            for($i=0;$i<count($from["fields"]);$i++) {
-                $mainTableFlds[$from["fields"][$i]] = $row[$i];
-            }
-            $newRec = $recordSet->add_record($resName,$mainTableFlds,$this->dm->get_idfld($resName));
-
-            $recOffset = count($from["fields"]) ;
-            foreach ($joinArr as $fld=>$join) {
-                //print_r($join);
-                // extract fields of the joined array
-                $joinTableFlds = [];
-                for($i=0;$i<count($join["fields"]);$i++) {
-                    $joinTableFlds[$join["fields"][$i]] = $row[$i+$recOffset];
-                }
-
-                if(!empty($joinTableFlds[$join["fkFLd"]])) {
-                    $relRecId = $joinTableFlds[$join["fkFLd"]];
-                    $relRecType = $join["table"];
-                    unset($joinTableFlds[$join["fkFLd"]]);
-                    $newRec->attributes->$fld = new \Record($relRecType,$relRecId,$joinTableFlds);
-                }
-                //$recordSet->add_related_record($join["table"],$tmp);
-                $recOffset += count($join["fields"]);
-            }
-            reset($joinArr);
-        }
-
-        return $recordSet;
+        return $attributes;
     }
-
 
     /**
      * create new Record
      * TODO: clarify best approach about what to return after inserting OK....
      *
-     *
      * @param $table
      * @param object $data data to be inserted
-     * @param bool $recursive allow recursive insert
      * @param string $onDuplicate behaviour flags
      * @param String[] $fieldsToUpdate
      * @param $path
@@ -701,7 +565,10 @@ class Records {
      * @return \Response
      * @throws \Exception
      */
-    function insert($table, $data, $recursive, $onDuplicate, $fieldsToUpdate, $path, &$includes) {
+    function insert($table, $data, $wd, $onDuplicate, $fieldsToUpdate, $path, &$includes) {
+        if($wd==0)
+            throw new \Exception("Maximum recursion level has been reached. Aborting. Please review your nested data.",400);
+
         //$table = $data->type;
         if($data->type!=$table)
             throw new \Exception("Invalid data type '$table'",400);
@@ -726,7 +593,6 @@ class Records {
             $insertData[$idFld] = $data->id;
         }
 
-
         // collect attributes
         foreach($attributes as $fldName=>$value) {
             if(!$this->dm->field_is_insertable($table,$fldName))
@@ -737,17 +603,36 @@ class Records {
         $one2nRelations = [];
         // iterate relations and insert recursive if it is the case
         foreach ($relations as $relName=>$relData) {
-            if(!isset($relData->data)) {
-                throw new \Exception("Invalid relationship '$relName' data: invalid format",400);
-            }
-            if(!is_object($relData)) {
+            // gets relationship config. Throws an error when relation is not valid
+            $relSpec = $this->dm->get_relationship($table, $relName);
+
+            // todo: implement full validation in input_validator and remove the code bellow
+            if(!is_object($relData))
                 throw new \Exception("Invalid relationship '$relName' data: invalid format ",400);
-            }
+
+            if(!isset($relData->data))
+                throw new \Exception("Invalid relationship '$relName' data: invalid format",400);
+
+
+            // relation type vs data type: object 4 outbound; array 4 inbound
+            if ($relSpec["type"]=="inbound" && !is_array($relData->data))
+                throw new \Exception("Invalid 1:n relation '$relName' for '$table'",400);
+
+            if ($relSpec["type"]=="outbound" && !is_object($relData->data) )
+                throw new \Exception("Invalid 1:1 relation '$relName' for '$table'",400);
+
+
             // inbound relation (1:n) add to stack for later insert
-            if(is_array($relData->data)) {
-                $one2nRelations[$relName] = $relData->data;
+            if(is_array($relData->data) && $relSpec["type"]=="inbound") {
+                $one2nRelations[$relName] = [
+                    "data"=>$relData->data,
+                    "spec"=>$relSpec
+                ];
                 continue;
             }
+
+            //////////////////////////////////////////////////
+            // continue with outbound relation (1:1) processing
 
             if(!$this->dm->is_valid_field($table,$relName))
                 throw new \Exception("Invalid 1:1 relation '$relName' for '$table'",400);
@@ -756,9 +641,10 @@ class Records {
                 throw new \Exception("Invalid relationship data: missing '$relName' type",400);
 
             $fk = (object)$this->dm->get_outbound_relation($table,$relName);
-            //$relData = (object)$relData;
+
             if($fk->table!==$relData->data->type)
                 throw new \Exception("Invalid relationship data: invalid type for relationship '$relName'",400);
+
             $newPath = $path==null?$relName:$path.".$relName";
             if(isset($relData->data->id)) {
                 if(!in_array($newPath,$includes))
@@ -767,20 +653,32 @@ class Records {
                 continue;
             }
             if(isset($relData->data->attributes)) {
-                $insertData[$relName] = $this->insert($fk->table,$relData->data,$recursive,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
+                $insertData[$relName] = $this->insert($fk->table,$relData->data,$wd-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
                 if(!in_array($newPath,$includes))
                     $includes[] = $newPath;
             }
         }
 
-        $insertData = $this->dm->validate_object_attributes($table,$insertData,"ins");
+        $insertData = $this->validate_insert_data($table,$insertData);
 
-        // print_r($attributes);
-        $insSql = $this->dbdrv->insert_string($table,$insertData);
+        // call hook is set
+        $tableConfig = $this->dm->get_config($table);
+        if(isset($tableConfig["oninsert"]) && is_callable($tableConfig["oninsert"])) {
+            $insertData = $tableConfig["oninsert"]($insertData,$tableConfig);
+        }
 
-        // configure behaviour to update fields when
-        // valid for MySQL
-        // todo: should put this in an external file
+
+        // check insert data for non-scalar values and throw error in case found
+        foreach ($insertData as $key=>$value) {
+            if(!is_scalar($value)) {
+                throw new \Exception("Invalid value for $key: ".json_encode($value));
+            }
+            $this->dbdrv->set($key,$value);
+        }
+
+        $insSql = $this->dbdrv->get_compiled_insert($table);
+
+        // todo: should put this in an external file: configure behaviour to update fields (database specific)
         switch ($onDuplicate) {
             case "update":
                 if (empty($fieldsToUpdate[$table]))
@@ -801,46 +699,111 @@ class Records {
                 if($idFld)
                     $insSql .= " ON DUPLICATE KEY UPDATE $idFld=$idFld";
                 break;
+            case "error":
+                break;
+            default:
+                throw new \Exception("Invalid 'onduplicate' parameter value.");
         }
 
 
         // insert data in DB
-        if(!$this->dbdrv->query($insSql)) {
+        $res = $this->dbdrv->query($insSql);
+        /**
+         * @var \Dbapi $ci
+         *
+         */
+        $ci = get_instance();
+        $ci->debug_log($insSql);
+
+        if(!$res) {
+            // todo: log message to the app log file
             log_message("error","$insSql");
             throw new \Exception($this->dbdrv->error()["message"], 500);
         }
 
         // retrieve resource ID (mysql specific)
         // todo: evaluate impact for other DB engines and implement
-        $insId = $this->dbdrv->insert_id();
-        if(!$insId && $this->dbdrv->affected_rows() && $idFld)
-            $insId = $insertData[$idFld];
+        $newRecId = $this->dbdrv->insert_id();
+        if(!$newRecId && $this->dbdrv->affected_rows() && is_scalar($insertData[$idFld]))
+            $newRecId = $insertData[$idFld];
 
-        if($insId)
-            return $insId;
+        if(!$newRecId) {
 
-        $selSql = $this->dbdrv
-                    ->where($insertData)
-                    ->get_compiled_select($table);
+            $selSql = $this->dbdrv
+                ->where($insertData)
+                ->get_compiled_select($table);
+            print_r($selSql);
 
-        /**
-         * @var \CI_DB_result
-         */
-        $q = $this->dbdrv->query($selSql);
-        $cnt = $q->num_rows();
+            $q = $this->dbdrv->query($selSql);
+            get_instance()->debug_log($selSql);
+            $cnt = $q->num_rows();
 
-        if($cnt>1) {
-            log_message("error","More then one records returned on Insert new record: $insSql / $selSql");
-            throw new \Exception("More then one records returned",500);
+            if($cnt > 1) {
+                log_message("error", "More then one records returned on Insert new record: $insSql / $selSql");
+                return null;
+            }
+
+            $newRecId = $q->row()->$idFld;
         }
 
-        if($cnt==0) {
-            log_message("error","Insert did not failed, but no records where returned...: $insSql / $selSql");
-            throw new \Exception("Server error. Contact administrator.",500);
+        // create outbound relations
+        if($newRecId && $one2nRelations) {
+            foreach ($one2nRelations as $relName=>$relData) {
+                $relSpec = $relData["spec"];
+                $rels = $relData["data"];
+
+                $newPath = $path==null ? $relName : "$path.$relName";
+
+                // iterate through data
+                foreach ($rels as $rel){
+                    // check relation data type
+                    $objType = $this->get_object_type($rel);
+                    $fkFld = $relSpec["field"];
+                    switch ($objType) {
+                        // data is a resource indicator object = related record exist already
+                        // => perform an update with the id of the newly created object for the FK field
+                        case "ResourceIndicatorObject":
+                            // update related record
+                            if(!$relSpec["update"])
+                                throw new \Exception("Not allowed to update relationship of type $relName",403);
+                            $rel->attributes = (object) [
+                                $relSpec["field"]=>$newRecId
+                            ];
+                            if(!in_array($newPath,$includes))
+                                $includes[] = $newPath;
+                            $this->update_record($relSpec["table"],$rel);
+                            break;
+                            // data is of newResourceObject type => new related record must be created
+                        case "newResourceObject":
+                            // insert new related record
+                            if(!$relSpec["insert"])
+                                throw new \Exception("Not allowed to update relationship of type $relName",403);
+                            if(!in_array($newPath,$includes))
+                                $includes[] = $newPath;
+                            $rel->attributes->$fkFld = $newRecId;
+
+                            $this->insert($relSpec["table"],$rel,$wd-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
+                            break;
+                        default:
+                            throw new \Exception("Invalid '$relName' relationship data type ($objType) : ".json_encode($rel),403);
+                    }
+                }
+
+
+            }
         }
 
-        $newRecId = $q->row()->$idFld;
         return $newRecId;
+    }
+
+    /**
+     * @param $table
+     * @param $resource
+     * @return string
+     * @throws \Exception
+     */
+    function update_record($table,$resource) {
+        return $this->update_by_id($table,$resource->id,$resource);
     }
 
 
@@ -853,6 +816,8 @@ class Records {
      * @throws \Exception
      */
     function update_by_id($table, $id, $resource) {
+        if($resource->type!==$table)
+            throw new \Exception("Object type does not match");
         try {
             $resource->attributes = $this->dm->validate_object_attributes($table, $resource->attributes, "upd");
         }
@@ -879,6 +844,7 @@ class Records {
             $sql = "SELECT * FROM $table WHERE $priKey!='$id' AND (".implode(" OR ",$whereArr).")";
 
             $q = $this->dbdrv->query($sql);
+            get_instance()->debug_log($sql);
             if($q->num_rows()) {
                 throw new \Exception("Duplicate key fields",409);
             }
@@ -919,6 +885,28 @@ class Records {
             return true;
         }
         throw new \Exception("Record not found",404);
+    }
+
+    /**
+     * @param $obj
+     * @return string
+     * @throws \Exception
+     */
+    private function get_object_type($obj)
+    {
+        if(!is_object($obj))
+            return "NoObject";
+
+        if(property_exists($obj,"data"))
+            return "DocumentObject";
+
+        if(!property_exists($obj,"type"))
+            return "UnknownObject";
+
+        if(property_exists($obj,"id"))
+            return property_exists($obj,"attributes")?"ResourceObject":"ResourceIndicatorObject";
+        else
+            return property_exists($obj,"attributes")?"newResourceObject":"InvalidObject";
     }
 
 }

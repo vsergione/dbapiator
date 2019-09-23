@@ -48,6 +48,18 @@ class Error extends json_ready
     }
 
     /**
+     * @param array $data
+     * @return Error
+     */
+    static function from_error_catalog($data)
+    {
+        return new self([
+            "code"=>$data["code"],
+            "title"=>$data["title"]
+        ]);
+    }
+
+    /**
      * @param \Exception $e
      * @return Error
      */

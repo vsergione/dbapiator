@@ -10,6 +10,23 @@ require_once(APPPATH."third_party/Apiator/Autoloader.php");
 \Apiator\Autoloader::register();
 
 /**
+ * create_multiple_records
+ * update_multiple_records
+ * delete_multiple_records
+ *
+ * get_multiple_records
+ * get_single_record
+ *
+ * create_single_record
+ * update_single_record
+ * delete_single_record
+ * get_relationship
+ * create_relationship
+ * update_relationship
+ * delete_relationship
+ */
+
+/**
  * Class Dbapi controller: translates API calls into SQL statements
  * @property CI_Config config
  * @property CI_Loader load
@@ -42,28 +59,61 @@ class Dbapi extends CI_Controller
      */
     private $inputData;
     private $baseUrl = "https://dbapi.apiator/api/5cbaed2eb9a51";
-    private $nolinks = true;
-    private $JsonApiDocOptions = ["nolinks"=>true];
+
+    private $noLinksInOutput = true;
+    /**
+     * @var array
+     */
+    private $JsonApiDocOptions = [
+        /**
+         * @var bool when true do not include links in output
+         */
+        "nolinks"=>true,
+        /**
+         * @var bool
+         */
+        "minify"=>false
+    ];
+
+    /**
+     * @var int set recursion level for creating new records
+     * set to 0 to disable it
+     */
+    private $insertMaxRecursionLevel=3;
+    private $debug=false;
+    /**
+     * @var string
+     */
+    private $apiConfigDir;
+    /**
+     * @var array
+     */
+    private $errors;
 
     function __construct ()
     {
         parent::__construct();
-
         $this->config->load("apiator");
+
         $this->deployment_type = $this->config->item("deployment_type");
-        if(empty( $this->deployment_type))
-            HttpResp::server_error("Invalid config. Deployment type unknown.");
 
         $this->load->helper("my_utils");
+
+        $this->load->config("errorscatalog");
+        $this->errors = $this->config->item("errors");
+
+        // TODO: implement CORS control
         header("Access-Control-Allow-Origin: *");
+
         $this->_init();
+
         $this->inputData = json_decode($this->input->raw_input_stream);
     }
 
 
 
     /**
-     * reads API configuration file, connects to the database and initializes the API DataModel (structure)
+     * reads API configuration file, connects to the database and initializes the DataModel (structure)
      * initializes internal objects:
      * - apiDm: DataModel
      * - apiDb: database connection
@@ -74,9 +124,9 @@ class Dbapi extends CI_Controller
             case "saas":
                 // API ID is retrieved by a function provided in the config file by the name "api_id"
                 $apiId = $this->config->item("api_id")();
-                if(is_null($apiId))
-                    HttpResp::error_out_json("Invalid call",400);
-
+                if(is_null($apiId)) {
+                    HttpResp::json_out(404);
+                }
                 $apiConfigDir = $this->config->item("apisDir")."/$apiId".$this->config->item("configdir_rel_path");
                 break;
             case "single":
@@ -90,12 +140,12 @@ class Dbapi extends CI_Controller
         $this->baseUrl = "https://".$_SERVER["SERVER_NAME"]."/v2";
         $this->JsonApiDocOptions["baseUrl"] = $this->baseUrl;
 
-
         if(!is_dir($apiConfigDir)) {
             // API Not found
-            // TODO: log to admin log that API not found
-            HttpResp::text_out(404,"API configuration not found");
+            // TODO: log to applog (API not found)
+            HttpResp::json_out(404);
         }
+        $this->apiConfigDir = $apiConfigDir;
 
         // load structure
         $structure = require($apiConfigDir."/structure.php");
@@ -183,7 +233,26 @@ class Dbapi extends CI_Controller
         HttpResp::json_out(200,$openApiSpec);
     }
 
+    /**
+     * Parses input data depending on the Content-Type header and returns it. When invalid content type returns null
+     * @return mixed|null
+     * @throws Exception
+     */
+    private function get_input_data()
+    {
+        if(!isset($_SERVER["CONTENT_TYPE"]))
+            throw new Exception("Missing Content-Type",400);
 
+        $cType = explode(";",$_SERVER["CONTENT_TYPE"]);
+
+        if(in_array("application/x-www-form-urlencoded",$cType))
+            return $this->inputData = json_decode(json_encode($this->input->post()));
+        if(in_array("application/vnd.api+json",$cType))
+            return $this->inputData = json_decode($this->input->raw_input_stream);
+
+        throw new Exception("Invalid Content-Type",400);
+
+    }
     /**
      * Creates multiple records with a single call
      * @todo to be implemented
@@ -193,6 +262,7 @@ class Dbapi extends CI_Controller
 
         print_r($this->inputData);
     }
+
 
     /**
      * Update multiple records of different types with a single call
@@ -242,7 +312,7 @@ class Dbapi extends CI_Controller
         }
 
         $options = [];
-        $doc = \JSONApi\Document::singleton($options,[]);
+        $doc = \JSONApi\Document::create($this->JsonApiDocOptions,[]);
 
         if(count($exceptions)) {
             foreach ($exceptions as $exception) {
@@ -443,8 +513,7 @@ class Dbapi extends CI_Controller
             list($records,$totalRecords) = $this->recs->get_records($resName,$queryParas);
             //print_r($records);
 
-            $options = ["nolinks"=>$this->nolinks,"baseUrl"=>$this->baseUrl];
-            $doc = \JSONApi\Document::singleton($options,$records);
+            $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$records);
             $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$queryParas["offset"],"totalRecords"=>$totalRecords]));
             //print_r($doc);
 
@@ -478,14 +547,13 @@ class Dbapi extends CI_Controller
 
             list($records,$totalRecords) = $this->recs->get_records($resName,$opts);
 
-            $options = ["nolinks"=>$this->nolinks,"baseUrl"=>$this->baseUrl];
             if(!$totalRecords) {
                 $doc = \JSONApi\Document::not_found($this->JsonApiDocOptions,"Not found",404);
                 HttpResp::json_out(200, $doc->json_data());
             }
 
             //$resource = \JSONApi\Resource::factory()
-            $doc = \JSONApi\Document::singleton($this->JsonApiDocOptions,$records[0])->json_data();
+            $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$records[0])->json_data();
             HttpResp::json_out(200,$doc);
         }
         catch (Exception $exception) {
@@ -495,8 +563,47 @@ class Dbapi extends CI_Controller
 
     function test($type=null,$resId=null)
     {
-        print_r($_SERVER);
+        switch ($type) {
+            case "dbins":
+                /**
+                 * @var CI_DB_driver $db
+                 */
+                $db = $this->load->database([
+                    "dsn"=> "",
+                    "hostname"=> "localhost",
+                    "username"=> "root",
+                    "password"=> "parola123",
+                    "database"=> "realy_simple_db",
+                    "dbdriver"=> "mysqli",
+                    "dbprefix"=> "",
+                    "pconnect"=> false,
+                    "db_debug"=> true,
+                    "cache_on"=> false,
+                    "cachedir"=> "",
+                    "char_set"=> "utf8",
+                    "dbcollat"=> "utf8_general_ci",
+                    "swap_pre"=> "",
+                    "encrypt"=> false,
+                    "compress"=> false,
+                    "stricton"=> false,
+                    "failover"=> [],
+                    "save_queries"=> true
+                ],true);
 
+                $db->query("INSERT INTO test values(2,2,2) ON DUPLICATE KEY UPDATE dd=dd");
+                echo $db->affected_rows();
+                break;
+            default:
+                $this->load->view("test");
+        }
+
+    }
+
+    function debug_log($module=0,$message=0) {
+        if(!$this->debug)
+            return false;
+        //print_r(debug_backtrace());
+        //error_log(printf("[%s][%s][%s][%s][%d] %s\n",date("h:m:s.u"),__FILE__,__CLASS__,__FUNCTION__,__LINE__,$countSql), 3,$this->apiId);
     }
 
 
@@ -617,24 +724,38 @@ class Dbapi extends CI_Controller
 
 
     /**
-     * method for inserting records in one table at a time. Supports single to multiple.
+     * Insert records recursively
      * @param $tableName
      * @return null
      * TODO: add some limitation for maximum records to insert at a time
      * @throws Exception
      */
-    public function simple_insert($tableName)
+    public function create_single_record($tableName)
     {
+        // get input data
+        try {
+            $postData = $this->get_input_data();
+        }
+        catch (Exception $exception) {
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
+        }
+
+        if(is_null($postData))
+            HttpResp::json_out(400,
+                \JSONApi\Document::error_doc($this->JsonApiDocOptions,[
+                    \JSONApi\Error::factory(["title"=>"Empty input data not allowed","code"=>400])
+                ])->json_data()
+            );
+
         // POST data validation
-        $postData = json_decode($this->input->raw_input_stream);
         try{
             validate_post_data($postData);
         }
         catch (Exception $exception) {
-            // TODO: log validation data, eventualy provide extra validation info....
             HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
-
         }
+
+        $opts = $this->get_query_paras($tableName);
 
         // configure onDuplicate behaviour
         $onDuplicate = $this->input->get("onduplicate");
@@ -650,7 +771,7 @@ class Dbapi extends CI_Controller
         }
 
         // starts transaction
-        $this->apiDb->trans_strict(FALSE);
+        $this->apiDb->trans_strict();
 
         // prepare data
         $entries = is_array($postData->data)?$postData->data:[$postData->data];
@@ -665,7 +786,8 @@ class Dbapi extends CI_Controller
                     continue;
 
                 $includes = [];
-                $recId = $this->recs->insert($tableName,$entry, true, $onDuplicate, $updateFields,null,$includes);
+                $recId = $this->recs->insert($tableName, $entry, $this->insertMaxRecursionLevel,
+                                                    $onDuplicate, $updateFields,null,$includes);
 
                 $recIdFld = $this->apiDm->get_key_fld($entry->type);
                 $filterStr = "$recIdFld=$recId";
@@ -692,9 +814,9 @@ class Dbapi extends CI_Controller
         if($totalRecords) {
             $options = [];
             if (is_object($postData->data))
-                $doc = \JSONApi\Document::singleton($options,$insertedRecords[0])->json_data();
+                $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$insertedRecords[0])->json_data();
             else
-                $doc = \JSONApi\Document::singleton($options,$insertedRecords)->json_data();
+                $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$insertedRecords)->json_data();
             HttpResp::json_out(200, $doc);
         }
         $err = \JSONApi\Error::factory(["code"=>400,"title"=>"No records inserted due to invalid input data"]);
