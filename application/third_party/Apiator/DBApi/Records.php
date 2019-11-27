@@ -613,8 +613,7 @@ class Records {
             if(!isset($relData->data))
                 throw new \Exception("Invalid relationship '$relName' data: invalid format",400);
 
-
-            // relation type vs data type: object 4 outbound; array 4 inbound
+            // relation type vs data type: object for outbound relations; array for inbound relations
             if ($relSpec["type"]=="inbound" && !is_array($relData->data))
                 throw new \Exception("Invalid 1:n relation '$relName' for '$table'",400);
 
@@ -633,6 +632,8 @@ class Records {
 
             //////////////////////////////////////////////////
             // continue with outbound relation (1:1) processing
+            // validate object structure
+            ///////////////////////////////////////////////////
 
             if(!$this->dm->is_valid_field($table,$relName))
                 throw new \Exception("Invalid 1:1 relation '$relName' for '$table'",400);
@@ -642,16 +643,20 @@ class Records {
 
             $fk = (object)$this->dm->get_outbound_relation($table,$relName);
 
+            // todo: data obfuscation ...........
             if($fk->table!==$relData->data->type)
                 throw new \Exception("Invalid relationship data: invalid type for relationship '$relName'",400);
 
             $newPath = $path==null?$relName:$path.".$relName";
             if(isset($relData->data->id)) {
+                // related record exists already; just set the id and continue
+                // still... it does not check if it actually exists... but on insert it will throw an error if ID is fake
                 if(!in_array($newPath,$includes))
                     $includes[] = $newPath;
                 $insertData[$relName] = $relData->data->id;
                 continue;
             }
+            // create 1:1 related record
             if(isset($relData->data->attributes)) {
                 $insertData[$relName] = $this->insert($fk->table,$relData->data,$wd-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
                 if(!in_array($newPath,$includes))
@@ -661,7 +666,7 @@ class Records {
 
         $insertData = $this->validate_insert_data($table,$insertData);
 
-        // call hook is set
+        // call oninsert hook
         $tableConfig = $this->dm->get_config($table);
         if(isset($tableConfig["oninsert"]) && is_callable($tableConfig["oninsert"])) {
             $insertData = $tableConfig["oninsert"]($insertData,$tableConfig);
@@ -670,7 +675,7 @@ class Records {
 
         // check insert data for non-scalar values and throw error in case found
         foreach ($insertData as $key=>$value) {
-            if(!is_scalar($value)) {
+            if($value!==null && !is_scalar($value)) {
                 throw new \Exception("Invalid value for $key: ".json_encode($value));
             }
             $this->dbdrv->set($key,$value);
@@ -705,20 +710,22 @@ class Records {
                 throw new \Exception("Invalid 'onduplicate' parameter value.");
         }
 
-
         // insert data in DB
+
+        $this->dbdrv->db_debug = false;
         $res = $this->dbdrv->query($insSql);
-        /**
-         * @var \Dbapi $ci
-         *
-         */
-        $ci = get_instance();
-        $ci->debug_log($insSql);
+
+//        /**
+//         * @var \Dbapi $ci
+//         *
+//         */
+//        $ci = get_instance();
 
         if(!$res) {
             // todo: log message to the app log file
-            log_message("error","$insSql");
-            throw new \Exception($this->dbdrv->error()["message"], 500);
+            $sqlErr = $this->dbdrv->error();
+            log_message("error",$sqlErr["message"]." > $insSql");
+            throw new \Exception($sqlErr["message"], 500);
         }
 
         // retrieve resource ID (mysql specific)
@@ -728,11 +735,10 @@ class Records {
             $newRecId = $insertData[$idFld];
 
         if(!$newRecId) {
-
             $selSql = $this->dbdrv
                 ->where($insertData)
                 ->get_compiled_select($table);
-            print_r($selSql);
+            //print_r($selSql);
 
             $q = $this->dbdrv->query($selSql);
             get_instance()->debug_log($selSql);
@@ -788,8 +794,6 @@ class Records {
                             throw new \Exception("Invalid '$relName' relationship data type ($objType) : ".json_encode($rel),403);
                     }
                 }
-
-
             }
         }
 
@@ -806,6 +810,60 @@ class Records {
         return $this->update_by_id($table,$resource->id,$resource);
     }
 
+    /**
+     * @param string $table
+     * @param string $id
+     * @param array $attributes
+     * @return string mixed
+     * @throws \Exception
+     */
+    private function update_attributes($table,$id,$attributes)
+    {
+        $priKey = $this->dm->get_key_fld($table);
+
+        $keyFields = $this->dm->get_key_flds($table);
+
+        $whereArr = array();
+
+        // check for duplicates on key fields
+        // @todo: contemplate if this code is really needed. Maybe a simple capture of the mysql error should do the job
+        // build where part with key fields
+        foreach($attributes as $name=>$value) {
+            if(in_array($name,$keyFields)) {
+                $whereArr[] = "$name='$value'";
+            }
+        }
+        // run the query
+        if(count($whereArr)) {
+            $sql = "SELECT * FROM $table WHERE $priKey!='$id' AND (".implode(" OR ",$whereArr).")";
+
+            if($this->dbdrv->query($sql)->num_rows()) {
+                throw new \Exception("Duplicate key fields",409);
+            }
+        }
+
+
+        $sql = $this->dbdrv
+            ->where($this->dm->get_key_fld($table),$id)
+            ->set($attributes)
+            ->get_compiled_update($table);
+
+        $this->dbdrv->query($sql);
+
+        if(isset($attributes[$priKey]))
+            return $attributes[$priKey];
+        return $id;
+
+    }
+
+    /**
+     * @param string $table
+     * @param string $id
+     * @param array $relationships
+     */
+    function update_relations($table,$id,$relationships) {
+
+    }
 
     /**
      * update Record
@@ -816,47 +874,55 @@ class Records {
      * @throws \Exception
      */
     function update_by_id($table, $id, $resource) {
-        if($resource->type!==$table)
-            throw new \Exception("Object type does not match");
+        if(!$this->dm->get_key_fld($table))
+            throw new \Exception("Update by ID not allowed: table '$table' does not have primary key/unique field.",500);
+
+        // extract 1:1 relation data and insert
+        if(isset($resource->relationships)) {
+            foreach ($resource->relationships as $relName => $relData) {
+                $relSpec = $this->dm->get_relation_config($table, $relName);
+
+                if ($relSpec["type"] !== "outbound")
+                    continue;
+
+                if (!isset($resource->attributes))
+                    $resource->attributes = new \stdClass();
+
+                if(isset($relData->id) && $relData->id!==null) {
+                    $resource->attributes->$relName = $relData->id;
+                    continue;
+                }
+
+                if(!isset($relData->type))
+                    throw new \Exception("Invalid empty data type for relation '$relName' of record ID $id of type $table");
+
+                if($relData->type!==$relSpec["table"])
+                    throw new \Exception("Invalid data type for relation '$relName' of record ID $id of type $table");
+
+                $includes = [];
+                echo "inserting";
+                print_r($relData);
+                $resource->attributes[$relName] = $this->insert($relData->type,$relData,get_instance()->get_max_insert_recursions(),
+                    "",[],null,$includes);
+            }
+        }
+
         try {
-            $resource->attributes = $this->dm->validate_object_attributes($table, $resource->attributes, "upd");
+            if(isset($resource->attributes) && count(get_object_vars($resource->attributes))) {
+                $resource->attributes = $this->dm->validate_object_attributes($table, $resource->attributes, "upd");
+                return $this->update_attributes($table,$id,$resource->attributes);
+            }
         }
         catch (\Exception $exception) {
             throw new \Exception("Could not update record due to data validation failure.",400,$exception);
         }
-        $priKey = $this->dm->get_key_fld($table);
-        if(!$priKey)
-            throw new \Exception("Update by ID not allowed: table '$table' does not have primary key.",500);
+
+        // todo: update 1:n relationships
 
         // get key flds of table
-        $keyFlds = $this->dm->get_key_flds($table);
 
 
-        // validate uniq recs
-        $whereArr = array();
-        foreach($resource->attributes as $name=>$value) {
-            if(in_array($name,$keyFlds)) {
-                $whereArr[] = "$name='$value'";
-            }
-        }
-
-        if(count($whereArr)) {
-            $sql = "SELECT * FROM $table WHERE $priKey!='$id' AND (".implode(" OR ",$whereArr).")";
-
-            $q = $this->dbdrv->query($sql);
-            get_instance()->debug_log($sql);
-            if($q->num_rows()) {
-                throw new \Exception("Duplicate key fields",409);
-            }
-        }
-
-
-        $this->dbdrv->where($this->dm->get_key_fld($table),$id);
-        $this->dbdrv->update($table,$resource->attributes);
-        if(isset($resource->attributes[$priKey]))
-            return $resource->attributes[$priKey];
-        return $resource->id;
-
+        return  $id;
     }
 
 

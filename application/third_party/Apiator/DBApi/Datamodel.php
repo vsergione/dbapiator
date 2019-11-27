@@ -156,7 +156,7 @@ class Datamodel {
      * @param string $relationName relation name
      * @return string target table name or null when relation name not found
      */
-    function get_rel_target_tbl($tableName,$relationName) {
+    private function get_rel_target_tbl($tableName,$relationName) {
         if($this->is_valid_relation($tableName,$relationName))
             return $this->dataModel[$tableName]["relations"][$relationName]["table"];
         return null;
@@ -207,7 +207,7 @@ class Datamodel {
      */
     function get_relation_type($tableName, $relationName) {
         if($this->is_valid_relation($tableName,$relationName))
-            return $this->dataModel[$tableName]["relations"][$relationName]["relType"];
+            return $this->dataModel[$tableName]["relations"][$relationName]["type"];
         return null;
     }
 
@@ -326,6 +326,7 @@ class Datamodel {
      * @throws \Exception
      */
     function is_valid_value($tableName,$fieldName,$value) {
+
         $mysqlTypes = [
             "numeric"=>[
                 "int","tinyint","smallint","mediumint","int","bigint","decimal","float","double","real","bit","boolean","serial"

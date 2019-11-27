@@ -148,6 +148,9 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/get_related/$1/$2/$3";
 
 
+$route["^$stdOpsPath\/.*"]["options"] = "$controller/options";
+
+
 //
 //
 //$route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/fetch_multiple/$1/$2";

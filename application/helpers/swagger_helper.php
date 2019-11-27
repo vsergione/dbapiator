@@ -1130,20 +1130,24 @@ function get_related($resourceName, $resourceSpecification, $relationshipName)
 /**
  * @param $hostName
  * @param $basePath
+ * @param $desc
+ * @param $title
+ * @param $name
+ * @param $email
  * @return array
  */
-function open_api_spec($hostName, $basePath)
+function open_api_spec($hostName, $basePath,$desc,$title,$name,$email)
 {
 
     return [
         "openapi" => "3.0.2",
         "info" => [
-            "description" => "Demoblog DB API",
+            "description" => $desc,
             "version" => "1.0.0",
-            "title" => "Demoblog",
+            "title" => $title,
             "contact" => [
-                "name" => "Sergiu Voicu",
-                "email" => "svoicu@softaccel.net"
+                "name" => $name,
+                "email" => $email
             ],
             "license" => [
                 "name" => "GPL"
@@ -1165,11 +1169,15 @@ function open_api_spec($hostName, $basePath)
  * @param $hostName
  * @param $dataModel
  * @param $basePath
+ * @param $desc
+ * @param $title
+ * @param $name
+ * @param $email
  * @return array
  */
-function generate_swagger($hostName,$dataModel,$basePath)
+function generate_swagger($hostName,$dataModel,$basePath,$desc,$title,$name,$email)
 {
-    $openApiSpec =  open_api_spec($hostName,$basePath);
+    $openApiSpec =  open_api_spec($hostName,$basePath,$desc,$title,$name,$email);
 
     /************************************************
      * path: /
