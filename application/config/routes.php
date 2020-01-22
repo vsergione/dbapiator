@@ -68,7 +68,7 @@ $stdOpsPath = $basePath;
 
 
 
-// API
+// API - just for testing direct method call
 $route["^api/([\w\-\_]+)"] = "$controller/$1";
 
 // APIID/EP
@@ -106,26 +106,32 @@ $route["^test"] ="$controller/test";
 $route["^test\/(.*)"] ="$controller/test/$1";
 
 
+// stored procedures
+$route["^$stdOpsPath\/__call__/([\w\-\_\%]+)"] = "$controller/callStoredProcedure/$1";
+
+
 
 // first family: - bulk operations /
 // #1
-$route["^$stdOpsPath"]["post"] ="$controller/create_multiple_records";
+$route["^$stdOpsPath"]["post"] ="$controller/createMultipleRecords";
 // #2
-$route["^$stdOpsPath"]["patch"] ="$controller/update_multiple_records";
+$route["^$stdOpsPath"]["patch"] ="$controller/updateMultipleRecords";
 // #3
-$route["^$stdOpsPath"]["delete"] ="$controller/delete_multiple_records";
+$route["^$stdOpsPath"]["delete"] ="$controller/deleteMultipleRecords";
 
 
 // second family: /resourceŃame
 // #4 OK
-$route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/get_multiple_records/$1";
+//$route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/getMultipleRecords/$1";
+$route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/getRecords/$1";
 // #5
-$route["^$stdOpsPath\/([\w\-\_\%]+)"]["post"] = "$controller/create_single_record/$1";
+$route["^$stdOpsPath\/([\w\-\_\%]+)"]["post"] = "$controller/createSingleRecord/$1";
 
 
 // third family: /resourceName/id
 // #6 OK
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/get_single_record/$1/$2";
+//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getSingleRecord/$1/$2";
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRecords/$1/$2";
 // #7
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/update_single_record/$1/$2";
 // #8

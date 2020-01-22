@@ -42,11 +42,11 @@ class Datamodel {
 
     /**
      * get table fields
-     * @param string $tableName table nam
+     * @param string $resourceName table nam
      * @return array|null
      */
-    function get_fields($tableName) {
-        return $this->dataModel[$tableName]["fields"];
+    function getResourceFields($resourceName) {
+        return $this->dataModel[$resourceName]["fields"];
     }
 
     /**
@@ -143,7 +143,7 @@ class Datamodel {
      * @param $resName
      * @return mixed
      */
-    function get_key_fld($resName)
+    function getPrimaryKey($resName)
     {
         return isset($this->dataModel[$resName]["keyFld"])?$this->dataModel[$resName]["keyFld"]:null;
     }
@@ -281,22 +281,22 @@ class Datamodel {
 
     /**
      * @param $resName
-     * @param $field
+     * @param $relName
      * @return Response
      * @throws \Exception
      */
-    function get_outbound_relation($resName, $field) {
+    function get_outbound_relation($resName, $relName) {
 
         if(!$this->resource_exists($resName))
             throw new \Exception("Invalid resource $resName",400);
 
-        if(!$this->is_valid_field($resName,$field))
-            throw new \Exception("Invalid field $field",400);
+        if(!isset($this->dataModel[$resName]["relations"][$relName]))
+            throw new \Exception("Invalid relationship name '$relName'",400);
 
-        if(!isset($this->dataModel[$resName]["fields"][$field]["foreignKey"]))
-            throw new \Exception("Field $field is not a foreign key",400);
+        if($this->dataModel[$resName]["relations"][$relName]["type"]!=="outbound")
+            throw new \Exception("Invalid outbound relationship '$relName'",400);
 
-        return $this->dataModel[$resName]["fields"][$field]["foreignKey"];
+        return $this->dataModel[$resName]["relations"][$relName];
     }
 
     /**
@@ -348,7 +348,7 @@ class Datamodel {
         if(!$this->is_valid_field($tableName,$fieldName))
             throw new \Exception("Invalid field $fieldName",400);
 
-        $fields = $this->get_fields($tableName);
+        $fields = $this->getResourceFields($tableName);
 
         if($value==="") {
             if(in_array($fields[$fieldName]["type"]["proto"],$mysqlTypes["numeric"]))
@@ -705,6 +705,10 @@ class Datamodel {
     public function get_fk_fields ($resName)
     {
         $fks = [];
+//        foreach ($this->dataModel[$resName]["relations"] as $relName=>$relSpec) {
+//            if($relSpec["type"]==="outbound")
+//                $fks[$]
+//        }
         foreach ($this->dataModel[$resName]["fields"] as $fieldName=>$fieldSpec) {
             if(isset($fieldSpec["foreignKey"]))
                 $fks[$fieldName] = $fieldSpec["foreignKey"];

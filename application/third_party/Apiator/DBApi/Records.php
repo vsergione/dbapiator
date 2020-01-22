@@ -27,7 +27,7 @@ class Records {
 
     private $debug = true;
     /**
-     * @var \Apiator\DBApi\Datamodel $dm
+     * @var Datamodel $dm
      */
     private $dm;
 
@@ -57,10 +57,10 @@ class Records {
      * it parses the includes into a relations tree, where each node contains:
      * - name: name of the table
      * - alias: alias for the table
-     * - lnkFld: field which indicated by the parent FK field. To be used in JOIN definition
-     * - fields: table fields (retrieved from DataBase data model which is important to be accurate)
+     * - lnkFld (optional): field indicated by the parent FK. To be used in JOIN definition
+     * - fields: table fields (retrieved from DB data model which is !important! to be accurate)
      * - select: fields to be included in the SELECT part (defaults to *)
-     * - includes: associative array of tables to be joined, where key is an FK field pointing to the related table
+     * - includes: hash array of tables to be joined, where key is an FK field pointing to the related table
      * - join: FK field of parent to be used in LEFT JOIN...ON expression, in tableAlias.fieldName format
      * - keyFld: primary key field
      * - noFlds: number of fields to be included in the result (count(select) when select!=* or count(fields) otherwise
@@ -73,7 +73,7 @@ class Records {
      * @return array
      * @throws \Exception
      */
-    private function generate_sql_parts($top, $includeStr, array $fields)
+    private function generateSqlParts($top, $includeStr, array $fields)
     {
         // parse & prepare includes
         $includeStr = trim($includeStr);
@@ -106,7 +106,6 @@ class Records {
                         unset($relationTree[$top]["inbound"][$relName]);
                 }
             }
-
         }
         catch (\Exception $exception) {
             throw new \Exception("Base table $top is invalid",400,$exception);
@@ -115,18 +114,19 @@ class Records {
 
         // populate relationTree tree by processing includes
         foreach ($includes as $include) {
-            $this->process_includes($relationTree[$top],$include,$fields);
+            $this->processIncludes($relationTree[$top],$include,$fields);
         }
 
         $select = [];
         $join = [];
-        $this->prepare_query($relationTree[$top],0,$select,$join);
+        $this->prepareQuery($relationTree[$top],0,$select,$join);
 
 
         $select = implode(", ",array_map(function($sel){
             return implode(", ",$sel);
         },$select));
         $join = implode(" \n",$join);
+        //echo  $join;
 
         return [$select,$join,$relationTree];
     }
@@ -140,64 +140,75 @@ class Records {
      * @param $fields
      * @throws \Exception
      */
-    private function process_includes(&$parent, $include,$fields)
+    private function processIncludes(&$parent, $include, $fields)
     {
+        $parent_table = $parent["name"];
+        $parent_alias = $parent["alias"];
+
         // if empty includes return
         if(!count($include)) {
             return;
         }
 
         // extract current level (first element of the array)
-        $relName = array_shift($include);
+        $relation_name = array_shift($include);
 
         // generate alias
-        $alias = $parent["alias"]."_".$relName;
+        $alias = $parent_alias."_".$relation_name;
 
         // retrieves relation between parent and current level
         // throws exception. caught lower and ignored
         try {
-            $fkRel = $this->dm->get_outbound_relation($parent["name"], $relName);
+            $fkRel = $this->dm->get_outbound_relation($parent_table, $relation_name);
+            //echo $relation_name;
+            //print_r($fkRel);
+            $parent_fk_field = $fkRel["fkfield"];
+            $related_table = $fkRel["table"];
+            $related_table_field = $fkRel["field"];
+
 
             // check if joined resource already there and if not create it
-            if(!array_key_exists($relName,$parent["includes"])) {
-                $parent["includes"][$relName] = [
-                    "name" => $fkRel["table"],
+            if(!array_key_exists($relation_name,$parent["includes"])) {
+                $parent["includes"][$relation_name] = [
+                    "name" => $related_table,
                     "alias" => $alias,
-                    "lnkFld" => $fkRel["field"],
-                    "fields" => $this->dm->get_selectable_fields($fkRel["table"]),
-                    "fks" => $this->dm->get_fk_fields($fkRel["table"]),
-                    "inbound" => $this->dm->get_inbound_relations($fkRel["table"]),
+                    "lnkFld" => $related_table_field,
+                    "fields" => $this->dm->get_selectable_fields($related_table),
+                    "fks" => $this->dm->get_fk_fields($related_table),
+                    "inbound" => $this->dm->get_inbound_relations($related_table),
                     "select" => [],
                     "includes" => [],
-                    "join" => $parent["alias"] . "." . $relName,
+                    "join" => $parent_alias . "." . $parent_fk_field,
                     "type" => "1:1",
                     "parent" => &$parent
                 ];
 
-                // print_r($parent["includes"][$relName]);
+                //print_r($parent["includes"][$relation_name]);
 
                 // if there is a fields selection for current node set it for select
-                if(isset($fields[$fkRel["table"]])) {
-                    $parent["includes"][$relName]["select"] = $fields[$fkRel["table"]];
-                    foreach (array_keys($parent["includes"][$relName]["inbound"]) as $relName) {
-                        if(!in_array($relName,$fields[$fkRel["table"]]))
-                            unset($parent["includes"][$relName]["inbound"][$relName]);
+                if(isset($fields[$related_table])) {
+                    $parent["includes"][$relation_name]["select"] = $fields[$related_table];
+                    foreach (array_keys($parent["includes"][$relation_name]["inbound"]) as $relation_name) {
+                        if(!in_array($relation_name,$fields[$related_table]))
+                            unset($parent["includes"][$relation_name]["inbound"][$relation_name]);
                     }
                 }
             }
-            if(!empty($parent["select"]) && !in_array($relName,$parent["select"])) {
-                $parent["select"][] = $relName;
+
+            if(!empty($parent["select"]) && !in_array($relation_name,$parent["select"])) {
+                $parent["select"][] = $relation_name;
             }
 
-            $this->process_includes($parent["includes"][$relName],$include,$fields);
+            $this->processIncludes($parent["includes"][$relation_name],$include,$fields);
         }
         catch (\Exception $exception) {
             //print_r($exception);
         }
 
-        if($inboundRel = $this->dm->get_inbound_relation($parent["name"], $relName)) {
-            if(!array_key_exists($relName,$parent["includes"])) {
-                $parent["includes"][$relName] = [
+        if($inboundRel = $this->dm->get_inbound_relation($parent_table, $relation_name)) {
+            //print_r($inboundRel);
+            if(!array_key_exists($relation_name,$parent["includes"])) {
+                $parent["includes"][$relation_name] = [
                         "type"=>"1:n",
                         "table"=>$inboundRel["table"],
                         "field"=>$inboundRel["field"],
@@ -216,9 +227,9 @@ class Records {
      * @param $join
      * @return int
      */
-    private function prepare_query(&$node, $start, &$select, &$join)
+    private function prepareQuery(&$node, $start, &$select, &$join)
     {
-        $id = $this->dm->get_key_fld($node["name"]);
+        $id = $this->dm->getPrimaryKey($node["name"]);
 
         $node["keyFld"] = $id;
         $node["offset"] = $start;
@@ -257,7 +268,7 @@ class Records {
         $start += $node["noFlds"];
         foreach (array_keys($node["includes"]) as $key) {
             if($node["includes"][$key]["type"]=="1:1")
-                $start = $this->prepare_query($node["includes"][$key],$start,$select,$join);
+                $start = $this->prepareQuery($node["includes"][$key],$start,$select,$join);
         }
 
 
@@ -271,8 +282,9 @@ class Records {
      * @return null|\stdClass
      * @throws \Exception
      */
-    private function parse_result_row($node, $row,&$allRecs)
+    private function parseResultRow($node, $row, &$allRecs)
     {
+//        print_r($row);
         $rec = null;
         $recId = null;
         if(!empty($node["keyFld"])) {
@@ -347,7 +359,7 @@ class Records {
             if(is_null($rec->relationships->$fk))
                 continue;
             if($incNode["type"]=="1:1") {
-                $inboundRelation = $this->parse_result_row($incNode, $row, $allRecs);
+                $inboundRelation = $this->parseResultRow($incNode, $row, $allRecs);
                 $rec->relationships->$fk = (object) [
                         "data"=>$inboundRelation,
                         "type"=>"object"
@@ -365,7 +377,7 @@ class Records {
 
                 ];
 
-                list($rec->relationships->$fk->data,$rec->relationships->$fk->total) = $this->get_records($incNode["table"],[
+                list($rec->relationships->$fk->data,$rec->relationships->$fk->total) = $this->getRecords($incNode["table"],[
                     "filter"=>$filter,
                     "limit"=>$this->maxNoRels
                 ]);
@@ -380,7 +392,7 @@ class Records {
      * @return int|string
      * @throws \Exception
      */
-    private function get_where_str($filters,$resName)
+    private function generateWhereSQL($filters, $resName)
     {
         $whereArr = [];
         foreach ($filters as $filter) {
@@ -399,7 +411,7 @@ class Records {
      * @return string
      * @throws \Exception
      */
-    private function get_sort_str($order,$resName)
+    private function generateSortSQL($order, $resName)
     {
         $orderByArr = [];
         foreach ($order as $item) {
@@ -427,7 +439,7 @@ class Records {
      * 8. run query
      * 9. parse result
      *
-     * @param string $tableName
+     * @param string $resourceName
      * @param array $opts [
             * "includeStr" => "",
             * "fields" => [],
@@ -441,15 +453,18 @@ class Records {
      * @todo: check filtering
      *
      */
-    function get_records($tableName, $opts=[])
+    function getRecords($resourceName, $opts=[])
     {
         // check if resource exists
-        if(!$this->dm->resource_exists($tableName))
-            throw new \Exception("Resource '$tableName' not found",404);
+        if(!$this->dm->resource_exists($resourceName))
+            throw new \Exception("Resource '$resourceName' not found",404);
 
         // check if client is authorized
-        if(!$this->dm->resource_allow_read($tableName))
-            throw new \Exception("Not authorized to read from '$tableName''",403);
+        if(!$this->dm->resource_allow_read($resourceName))
+            throw new \Exception("Not authorized to read from '$resourceName'",403);
+
+        $cfg = $this->dm->get_config($resourceName);
+        $tableName = isset($cfg["name"])?$cfg["name"]:$resourceName;
 
         // prepare parameters
         $defaultOpts = [
@@ -460,19 +475,24 @@ class Records {
             "limit"=>get_instance()->config->item("default_page_size_limit"),
             "order"=>[]
         ];
-        $opts = (object) array_merge($defaultOpts,$opts);
 
-        $whereStr = $this->get_where_str($opts->filter,$tableName);
+        $opts = (object) array_merge($defaultOpts,$opts);
+//        print_r($opts);
+        if(!property_exists($opts,"custom_where")) {
+            $whereStr = $this->generateWhereSQL($opts->filter,$tableName);
+        }
+        else {
+            $whereStr = $opts->custom_where;
+        }
+
 
         // extract total number of records matched by the query
-        $countSql = "SELECT count(*) as cnt FROM $tableName WHERE $whereStr";
+        $countSql = "SELECT count(*) as `cnt` FROM `$tableName` WHERE $whereStr";
         $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
-        get_instance()->debug_log($countSql);
 
         // return if no records matched
         if($totalRecs==0) return [[],0];
 
-        $recordSet = [];
         // prepare field selection (validate and ....
         foreach ($opts->fields as $res=>$fldsStr) {
             $opts->fields[$res] = [];
@@ -488,17 +508,19 @@ class Records {
         }
 
         // generate SQL parts & relation tree
-        list($select,$join,$relTree) = $this->generate_sql_parts($tableName,$opts->includeStr,$opts->fields);
+        $ttt = $this->generateSqlParts($tableName,$opts->includeStr,$opts->fields);
+        list($select,$join,$relTree) = $ttt;
+//        print_r($relTree);
         // prepare ORDER BY part
-        $orderStr = $this->get_sort_str($opts->order,$tableName);
+        $orderStr = $this->generateSortSQL($opts->order,$tableName);
 
         // compile SELECT
-        $mainSql = "SELECT $select FROM {$relTree[$tableName]["name"]} AS {$relTree[$tableName]["alias"]} "
+        $mainSql = "SELECT $select FROM `{$relTree[$tableName]["name"]}` AS `{$relTree[$tableName]["alias"]}` "
             .($join!==""?$join:"")
             ." WHERE $whereStr"
             ." ORDER BY $orderStr"
             ." LIMIT $opts->offset, $opts->limit";
-        //echo $mainSql."\n";
+//        echo $mainSql."\n";
 
 
         // run query
@@ -508,18 +530,19 @@ class Records {
 
         $rows = $res->result_array_num();
 
+        $recordSet = [];
         // parse result
         $allRecs = [];
         foreach ($rows as $row) {
-            $newRec = $this->parse_result_row($relTree[$tableName],$row,$allRecs);
+            $newRec = $this->parseResultRow($relTree[$resourceName],$row,$allRecs);
             $recordSet[] = $newRec;
         }
 
-        return [$recordSet,$totalRecs];
 
+        return [$recordSet,$totalRecs];
     }
 
-    private /**
+     /**
      * @param $resName
      * @param $attributes
      * @param string $operation
@@ -527,10 +550,10 @@ class Records {
      * TODO: review this method
      * @throws \Exception
      */
-    function validate_insert_data($resName, $attributes) {
+    private function validateInsertData($resName, $attributes) {
         $attributesNames = array_keys($attributes);
 
-        foreach($this->dm->get_fields($resName) as $fldName=>$fldSpec) {
+        foreach($this->dm->getResourceFields($resName) as $fldName=> $fldSpec) {
             if($fldSpec["required"] && is_null($fldSpec["default"]) && !in_array($fldName,$attributesNames))
                 throw new \Exception("Required attribute '$fldName' not provided",400);
 
@@ -558,6 +581,7 @@ class Records {
      *
      * @param $table
      * @param object $data data to be inserted
+     * @param $watchDog
      * @param string $onDuplicate behaviour flags
      * @param String[] $fieldsToUpdate
      * @param $path
@@ -565,8 +589,8 @@ class Records {
      * @return \Response
      * @throws \Exception
      */
-    function insert($table, $data, $wd, $onDuplicate, $fieldsToUpdate, $path, &$includes) {
-        if($wd==0)
+    function insert($table, $data, $watchDog, $onDuplicate, $fieldsToUpdate, $path, &$includes) {
+        if($watchDog==0)
             throw new \Exception("Maximum recursion level has been reached. Aborting. Please review your nested data.",400);
 
         //$table = $data->type;
@@ -586,7 +610,7 @@ class Records {
         // validate attributes
         $attributes = $data->attributes;
         $relations = isset($data->relationships)?$data->relationships:[];
-        $idFld = $this->dm->get_key_fld($table);
+        $idFld = $this->dm->getPrimaryKey($table);
 
         $insertData = [];
         if(isset($data->id)) {
@@ -658,13 +682,13 @@ class Records {
             }
             // create 1:1 related record
             if(isset($relData->data->attributes)) {
-                $insertData[$relName] = $this->insert($fk->table,$relData->data,$wd-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
+                $insertData[$relName] = $this->insert($fk->table,$relData->data,$watchDog-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
                 if(!in_array($newPath,$includes))
                     $includes[] = $newPath;
             }
         }
 
-        $insertData = $this->validate_insert_data($table,$insertData);
+        $insertData = $this->validateInsertData($table,$insertData);
 
         // call oninsert hook
         $tableConfig = $this->dm->get_config($table);
@@ -777,7 +801,7 @@ class Records {
                             ];
                             if(!in_array($newPath,$includes))
                                 $includes[] = $newPath;
-                            $this->update_record($relSpec["table"],$rel);
+                            $this->updateRecord($relSpec["table"],$rel);
                             break;
                             // data is of newResourceObject type => new related record must be created
                         case "newResourceObject":
@@ -788,7 +812,7 @@ class Records {
                                 $includes[] = $newPath;
                             $rel->attributes->$fkFld = $newRecId;
 
-                            $this->insert($relSpec["table"],$rel,$wd-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
+                            $this->insert($relSpec["table"],$rel,$watchDog-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
                             break;
                         default:
                             throw new \Exception("Invalid '$relName' relationship data type ($objType) : ".json_encode($rel),403);
@@ -806,8 +830,8 @@ class Records {
      * @return string
      * @throws \Exception
      */
-    function update_record($table,$resource) {
-        return $this->update_by_id($table,$resource->id,$resource);
+    function updateRecord($table, $resource) {
+        return $this->updateById($table,$resource->id,$resource);
     }
 
     /**
@@ -817,9 +841,9 @@ class Records {
      * @return string mixed
      * @throws \Exception
      */
-    private function update_attributes($table,$id,$attributes)
+    private function updateAttributes($table, $id, $attributes)
     {
-        $priKey = $this->dm->get_key_fld($table);
+        $priKey = $this->dm->getPrimaryKey($table);
 
         $keyFields = $this->dm->get_key_flds($table);
 
@@ -844,7 +868,7 @@ class Records {
 
 
         $sql = $this->dbdrv
-            ->where($this->dm->get_key_fld($table),$id)
+            ->where($this->dm->getPrimaryKey($table),$id)
             ->set($attributes)
             ->get_compiled_update($table);
 
@@ -861,7 +885,7 @@ class Records {
      * @param string $id
      * @param array $relationships
      */
-    function update_relations($table,$id,$relationships) {
+    function updateRelations($table, $id, $relationships) {
 
     }
 
@@ -873,8 +897,8 @@ class Records {
      * @return string
      * @throws \Exception
      */
-    function update_by_id($table, $id, $resource) {
-        if(!$this->dm->get_key_fld($table))
+    function updateById($table, $id, $resource) {
+        if(!$this->dm->getPrimaryKey($table))
             throw new \Exception("Update by ID not allowed: table '$table' does not have primary key/unique field.",500);
 
         // extract 1:1 relation data and insert
@@ -900,8 +924,8 @@ class Records {
                     throw new \Exception("Invalid data type for relation '$relName' of record ID $id of type $table");
 
                 $includes = [];
-                echo "inserting";
-                print_r($relData);
+//                echo "inserting";
+//                print_r($relData);
                 $resource->attributes[$relName] = $this->insert($relData->type,$relData,get_instance()->get_max_insert_recursions(),
                     "",[],null,$includes);
             }
@@ -910,7 +934,7 @@ class Records {
         try {
             if(isset($resource->attributes) && count(get_object_vars($resource->attributes))) {
                 $resource->attributes = $this->dm->validate_object_attributes($table, $resource->attributes, "upd");
-                return $this->update_attributes($table,$id,$resource->attributes);
+                return $this->updateAttributes($table,$id,$resource->attributes);
             }
         }
         catch (\Exception $exception) {
@@ -943,7 +967,7 @@ class Records {
         if(!$this->dm->resource_allow_delete($tableName))
             throw new \Exception("Not authorized to delete from $tableName",401);
 
-        $idFld = $this->dm->get_key_fld($tableName);
+        $idFld = $this->dm->getPrimaryKey($tableName);
 
         $this->dbdrv->where("$idFld in ('$recId')");
         $this->dbdrv->delete($tableName);

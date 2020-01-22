@@ -213,9 +213,8 @@ function get_updatefields($input,$defaultTable) {
  */
 function get_filter($rawFilterStr, $defaultTable)
 {
-    $filters = [];
     // split string by comma and process each segment
-    foreach(explode(",",$rawFilterStr) as $idx=>$item) {
+    foreach(explode("&&",$rawFilterStr) as $idx=>$item) {
         $where = null;
         // regexp search to identify
         preg_match("/([\w\-\$]+)(\.([\w\-\$]+))?(\!?[\=\<\>\~]+)(.*)/",$item,$m);
