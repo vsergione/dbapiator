@@ -579,7 +579,7 @@ class Dbapi extends CI_Controller
 
             if(!$totalRecords) {
                 $doc = \JSONApi\Document::not_found($this->JsonApiDocOptions,"Not found",404);
-                HttpResp::json_out(200, $doc->json_data());
+                HttpResp::json_out(404, $doc->json_data());
             }
 
             //$resource = \JSONApi\Resource::factory()
@@ -625,7 +625,7 @@ class Dbapi extends CI_Controller
             if(!is_null($recId)) {
                 if (!$totalRecords) {
                     $doc = \JSONApi\Document::not_found($this->JsonApiDocOptions, "Not found", 404);
-                    HttpResp::json_out(200, $doc->json_data());
+                    HttpResp::json_out(404, $doc->json_data());
                 }
 
                 $doc->setData($records[0]);
