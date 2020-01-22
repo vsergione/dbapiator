@@ -321,9 +321,8 @@ class Dbapi extends CI_Controller
         $ids = [];
         $exceptions = [];
         foreach ($newRecords as $idx=>$item) {
-            if(!isset($item->id)) {
+            if(!isset($item->id))
                 continue;
-            }
 
             try {
                 $ids[] = $this->update_single_record($item->type, $item->id, $item);
@@ -430,24 +429,16 @@ class Dbapi extends CI_Controller
             HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
-        // check if record exists
-        $filter = get_filter("$resKeyFld=$recId",$resourceName);
-        list($recs,$total) = $this->recs->getRecords($resourceName,[
-            "filter"=>$filter
-        ]);
-        if(!$total) {
-            $exception = new Exception("Record not $recId of type '$resourceName' not found",404);
-            if($internal)
-                throw $exception;
-            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
-        }
-
         // perform update
         try {
             $recId = $this->recs->updateById($resourceName, $recId, $updateData);
             if($internal)
                 return $recId;
-            $this->getRecords($resourceName,$recId);
+            $qp = $this->getQueryParameters($resourceName);
+//            print_r($qp);
+            unset($qp["offset"]);
+            unset($qp["limit"]);
+            $this->getRecords($resourceName,$recId,$qp);
         }
         catch (Exception $exception) {
             if($internal)
@@ -483,6 +474,12 @@ class Dbapi extends CI_Controller
         if($this->input->get("include")) {
             $queryParas["includeStr"] = $this->input->get("include");
         }
+
+        if($this->input->get("where")) {
+            $this->load->helper("where");
+            $queryParas["custom_where"] = parse_where($this->input->get("where"));
+        }
+
 
         // get sparse fieldset fields
         if($flds = $this->input->get("fields")) {
@@ -618,9 +615,11 @@ class Dbapi extends CI_Controller
         }
 
 
+
         // fetch records
         try {
             list($records,$totalRecords) = $this->recs->getRecords($resourceName,$queryParameters);
+//            print_r($records);
 
             // single record retrieval
             if(!is_null($recId)) {
@@ -991,3 +990,21 @@ class Dbapi extends CI_Controller
 
 }
 
+function custom_where($str) {
+    $expr = [];
+    $start = 0;
+    for($i=0;$i<strlen($str);$i++) {
+        if(in_array(substr($str,$i,2),["&&","||"])){
+            $expr[] = [
+                "type"=>"expr",
+                "expr"=>substr($expr,$start,$i-$start)
+            ];
+        }
+    }
+
+    $str = urldecode($str);
+    $str = str_replace("&&", "' AND ",$str);
+    $str = str_replace("||", "' OR ",$str);
+    $str = str_replace("~=", " OR ",$str);
+    return $str;
+}

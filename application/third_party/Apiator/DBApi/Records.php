@@ -475,9 +475,16 @@ class Records {
             "limit"=>get_instance()->config->item("default_page_size_limit"),
             "order"=>[]
         ];
-        $opts = (object) array_merge($defaultOpts,$opts);
 
-        $whereStr = $this->generateWhereSQL($opts->filter,$tableName);
+        $opts = (object) array_merge($defaultOpts,$opts);
+//        print_r($opts);
+        if(!property_exists($opts,"custom_where")) {
+            $whereStr = $this->generateWhereSQL($opts->filter,$tableName);
+        }
+        else {
+            $whereStr = $opts->custom_where;
+        }
+
 
         // extract total number of records matched by the query
         $countSql = "SELECT count(*) as `cnt` FROM `$tableName` WHERE $whereStr";
@@ -530,6 +537,7 @@ class Records {
             $newRec = $this->parseResultRow($relTree[$resourceName],$row,$allRecs);
             $recordSet[] = $newRec;
         }
+
 
         return [$recordSet,$totalRecs];
     }
