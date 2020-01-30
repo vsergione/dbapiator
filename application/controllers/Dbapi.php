@@ -71,7 +71,7 @@ class Dbapi extends CI_Controller
         /**
          * @var bool when true do not include links in output
          */
-        "nolinks"=>false,
+        "nolinks"=>true,
         /**
          * @var bool
          */
@@ -790,6 +790,7 @@ class Dbapi extends CI_Controller
      * @param string $resourceName parent record resource type
      * @param string $recId parent record ID
      * @param string $relationName related resource name
+     * @throws Exception
      */
     function getRelated($resourceName, $recId, $relationName)
     {
@@ -819,8 +820,9 @@ class Dbapi extends CI_Controller
                 HttpResp::not_found("RecordID $recId of $resourceName not found");
             }
             $parent = $records[0];
+//            print_r($parent->relationships->$relationName);
             if($relationType=="outbound")
-                $fkId = $parent->relationships->$relationName->id;
+                $fkId = $parent->relationships->$relationName->data->id;
         }
         catch (Exception $exception) {
             HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());

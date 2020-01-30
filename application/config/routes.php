@@ -151,7 +151,7 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+
 
 // fourth family: /resourceName/id/relation
 // #13
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/get_related/$1/$2/$3";
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRelated/$1/$2/$3";
 
 
 $route["^$stdOpsPath\/.*"]["options"] = "$controller/options";
