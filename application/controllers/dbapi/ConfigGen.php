@@ -31,6 +31,24 @@ class ConfigGen extends CI_Controller
         "save_queries"=> true
     ];
 
+    function cli($hostname,$username,$password,$database){
+        $conn = self::$conn;
+        $conn["dbdriver"] = 'mysqli';
+        $conn["hostname"] = $hostname;
+        $conn["username"] = $username;
+        $conn["password"] = $password;
+        $conn["database"] = $database;
+
+        $db = $this->load->database($conn,true);
+        $structure = \Softaccel\Apiator\DBApi\DBWalk::parse_mysql($db,$conn['database']);
+        $structure = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($structure,JSON_PRETTY_PRINT)).";";
+        $connection = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($conn,JSON_PRETTY_PRINT)).";";
+        file_put_contents("structure.php",$structure);
+        file_put_contents("connection.php",$connection);
+    }
+
+
+
     function mysql() {
         $conn = array_merge(self::$conn,$_POST);
 
