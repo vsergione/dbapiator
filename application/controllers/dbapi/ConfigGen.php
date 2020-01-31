@@ -41,7 +41,7 @@ class ConfigGen extends CI_Controller
 
         $db = $this->load->database($conn,true);
         $structure = \Softaccel\Apiator\DBApi\DBWalk::parse_mysql($db,$conn['database']);
-        $structure = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($structure,JSON_PRETTY_PRINT)).";";
+        $structure = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($structure['structure'],JSON_PRETTY_PRINT)).";";
         $connection = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($conn,JSON_PRETTY_PRINT)).";";
         file_put_contents($_SERVER['PWD']."/structure.php",$structure);
         file_put_contents($_SERVER['PWD']."/connection.php",$connection);
@@ -56,7 +56,7 @@ class ConfigGen extends CI_Controller
         $db = $this->load->database($conn,true);
 
         $structure = \Softaccel\Apiator\DBApi\DBWalk::parse_mysql($db,$_POST['database']);
-        $data['structure'] = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($structure,JSON_PRETTY_PRINT)).";";
+        $data['structure'] = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($structure['structure'],JSON_PRETTY_PRINT)).";";
         $data['connection'] = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($conn,JSON_PRETTY_PRINT)).";";
         $this->load->view("conf_output",$data);
     }
