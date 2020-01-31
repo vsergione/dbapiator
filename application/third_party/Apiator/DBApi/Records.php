@@ -466,13 +466,19 @@ class Records {
         $cfg = $this->dm->get_config($resourceName);
         $tableName = isset($cfg["name"])?$cfg["name"]:$resourceName;
 
+        $cfgLimit = get_instance()->config->item("default_page_size_limit");
+        if(!intval($cfgLimit)) {
+            log_message('error','Invalid default_page_size_limit');
+            $cfgLimit = 10;
+        }
+
         // prepare parameters
         $defaultOpts = [
             "includeStr" => "",
             "fields" => [],
             "filter"=>[],
             "offset"=>0,
-            "limit"=>get_instance()->config->item("default_page_size_limit"),
+            "limit"=>$cfgLimit,
             "order"=>[]
         ];
 

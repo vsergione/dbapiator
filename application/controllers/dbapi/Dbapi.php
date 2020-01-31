@@ -61,7 +61,7 @@ class Dbapi extends CI_Controller
      * @var mixed
      */
     private $inputData;
-    private $baseUrl = "https://dbapi.apiator/api/5cbaed2eb9a51";
+    private $baseUrl;
 
     private $noLinksInOutput = false;
     /**
@@ -152,22 +152,24 @@ class Dbapi extends CI_Controller
      */
     private function _init()
     {
-        switch ($this->deployment_type) {
-            case "saas":
-                // API ID is retrieved by a function provided in the config file by the name "api_id"
-                $apiId = $this->config->item("api_id")();
-                if(is_null($apiId)) {
-                    HttpResp::json_out(404);
-                }
-                $apiConfigDir = $this->config->item("apisDir")."/$apiId".$this->config->item("configdir_rel_path");
-                break;
-            case "single":
-                $apiConfigDir = $this->config->item("api_config_dir");
-                break;
-            default:
-                HttpResp::server_error("Invalid deployment type");
+//        switch ($this->deployment_type) {
+//            case "saas":
+//                // API ID is retrieved by a function provided in the config file by the name "api_id"
+//                $apiId = $this->config->item("api_id")();
+//                if(is_null($apiId)) {
+//                    HttpResp::json_out(404);
+//                }
+//                $apiConfigDir = $this->config->item("apisDir")."/$apiId".$this->config->item("configdir_rel_path");
+//                break;
+//            case "single":
+//                $apiConfigDir = $this->config->item("api_config_dir");
+//                break;
+//            default:
+//                HttpResp::server_error("Invalid deployment type");
+//
+//        }
 
-        }
+        $apiConfigDir = $this->config->item("api_config_dir");
 
         $this->baseUrl = "https://".$_SERVER["SERVER_NAME"]."/v2";
         $this->JsonApiDocOptions["baseUrl"] = $this->baseUrl;

@@ -55,7 +55,7 @@ $route['translate_uri_dashes'] = false;
 
 
 // /api/apiName/entryPoint
-$controller = "dbapi";
+$controller = "dbapi/dbapi";
 $basePath = "v2";
 
 // ApiId part of the domain name
@@ -155,36 +155,4 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$c
 
 
 $route["^$stdOpsPath\/.*"]["options"] = "$controller/options";
-
-
-//
-//
-//$route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/fetch_multiple/$1/$2";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)"]["post"] = "$controller/simple_insert/$1/$2";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)"]["delete"] = "$controller/bulk_delete/$1/$2";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)"]["patch"] = "$controller/update_bulk/$1/$2";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)"]["options"] = "$controller/options/$1/$2";
-//
-//$route["^$blkOpsPath\/([\w\-\_\%]+)"]["post"] = "$controller/bulk_insert/$1/$2";
-//$route["^$blkOpsPath\/([\w\-\_\%]+)"]["patch"] = "$controller/bulk_update/$1/$2";
-//$route["^$blkOpsPath\/([\w\-\_\%]+)"]["delete"] = "$controller/bulk_delete/$1/$2";
-//$route["^$blkOpsPath\/([\w\-\_\%]+)"]["options"] = "$controller/options/$1/$2";
-//
-//$route["^swagger"]["get"] = "$controller/swagger";
-//
-//// api/$apiId/$resName/$resId
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["get"] = "$controller/fetch_single/$1/$2/$3";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["delete"] = "$controller/single_delete/$1/$2/$3";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["patch"] = "$controller/update/$1/$2/$3";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["post"] = "$controller/create/$1/$2/$3";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)$"]["options"] = "$controller/options/$1/$2/$3";
-//
-//
-//// APIID/RESOURCE/ID/relationships/RELNAME
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\%_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\%_]+)"]["get"] = "$controller/fetch_relationships/$1/$2/$3";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["patch"] = "$controller/update_relationships/$1/$2/$3";
-//$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/relationships\/([\w\-\%_]+)"]["options"] = "$controller/options/$1/$2/$3";
-//
-//
 
