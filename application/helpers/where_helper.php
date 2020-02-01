@@ -1,6 +1,6 @@
 <?php
 
-function parse_where($str) {
+function parseStrAsWhere($str) {
     $expr = [];
     $start = 0;
     for($i=0;$i<strlen($str);$i++)
@@ -10,7 +10,7 @@ function parse_where($str) {
             continue;
 
         $expr[] = parseExpr(substr($str,$start,$i-$start));
-        $expr[] = parseLogicalOp($op);
+        $expr[] = getLogicalOperator($op);
         $start = $i+2;
     }
     $expr[] = parseExpr(substr($str,$start));
@@ -46,11 +46,11 @@ function parseExpr($str) {
             $right = $m[3];
     }
     $right = "'$right'";
-    $op = parseCompOp($m[2]);
+    $op = getComparisonOperator($m[2]);
     return $left.$op.$right;
 }
 
-function parseCompOp($opStr) {
+function getComparisonOperator($opStr) {
     $opMap = [
         "==" => "=",
         "!=" => "!=",
@@ -70,7 +70,7 @@ function parseCompOp($opStr) {
         return $opMap[$opStr];
     return null;
 }
-function parseLogicalOp($str) {
+function getLogicalOperator($str) {
 
     return [
         "&&" => " AND ",

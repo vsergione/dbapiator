@@ -236,26 +236,6 @@ function get_filter($rawFilterStr, $defaultTable)
     return $filters;
 }
 
-/**
- * extracts offset from GET
- * @param CI_Input $input
- * @return int
- */
-function get_offset($input,$defaultValue =0)
-{
-    return empty($input->get("offset"))?$defaultValue:$input->get("offset");
-}
-
-/**
- * @param CI_Input $input
- * @param int $defaultValue
- * @return mixed
- */
-function get_limit($input,$defaultValue)
-{
-    return empty($input->get("limit"))?$defaultValue:$input->get("limit");
-
-}
 
 
 /**
@@ -263,7 +243,7 @@ function get_limit($input,$defaultValue)
  * @param string $defaultTable
  * @return array
  */
-function get_sort($str,$defaultTable)
+function getSort($str, $defaultTable)
 {
     // generate sort array
     $arr = explode(",",$str);
@@ -280,22 +260,13 @@ function get_sort($str,$defaultTable)
     return $sort;
 }
 
-/**
- * @param CI_Input $input
- * @return array
- */
-function get_relations($input)
-{
-    return empty($input->get("relations"))?[]:explode(",",$input->get("relations"));
-}
-
 
 /**
  * @param $input
  * @param $defaultTableName
  * @return array
  */
-function get_fields_to_update($input,$defaultTableName)
+function getFieldsToUpdate($input, $defaultTableName)
 {
     $updateFields = [];
 
@@ -347,7 +318,7 @@ function cleanUpArray($arr) {
  * @param array $requiredAttributes
  * @throws Exception
  */
-function validate_post_data($data, $requiredAttributes=[]) {
+function validatePostData($data, $requiredAttributes=[]) {
     if(!is_object($data))
         throw new Exception("Invalid top level data: not an object",400);
     if(!property_exists($data,"data"))
@@ -361,7 +332,7 @@ function validate_post_data($data, $requiredAttributes=[]) {
 
     if($requiredAttributes!==[])
         foreach($entries as $entry) {
-            is_valid_post_data_entry($entry,$requiredAttributes);
+            isValidPostDataEntry($entry,$requiredAttributes);
         }
     
 
@@ -372,25 +343,23 @@ function validate_post_data($data, $requiredAttributes=[]) {
  * @param array $requiredAttributes
  * @throws Exception
  */
-function validate_post_data_single($data, $requiredAttributes=[]) {
-    if(!is_object($data))
-        throw new Exception("Invalid top level data: not an object",400);
-    if(!property_exists($data,"data"))
-        throw new Exception("Invalid input object: missing 'data' property",400);
-
-    if(!in_array(gettype($data),["array","object"])) {
-        throw new Exception("Invalid data. Must be array or object", 400);
-    }
-
-    $entries = !is_array($data->data)?[$data->data]:$data->data;
-
-    if($requiredAttributes!==[])
-        foreach($entries as $entry) {
-            is_valid_post_data_entry($entry,$requiredAttributes);
-        }
-
-
-}
+//function validate_post_data_single($data, $requiredAttributes=[]) {
+//    if(!is_object($data))
+//        throw new Exception("Invalid top level data: not an object",400);
+//    if(!property_exists($data,"data"))
+//        throw new Exception("Invalid input object: missing 'data' property",400);
+//
+//    if(!in_array(gettype($data),["array","object"])) {
+//        throw new Exception("Invalid data. Must be array or object", 400);
+//    }
+//
+//    $entries = !is_array($data->data)?[$data->data]:$data->data;
+//
+//    if($requiredAttributes!==[])
+//        foreach($entries as $entry) {
+//            is_valid_post_data_entry($entry,$requiredAttributes);
+//        }
+//}
 
 /**
  * validates $data as a JSON API document
@@ -398,7 +367,7 @@ function validate_post_data_single($data, $requiredAttributes=[]) {
  * @param array $requiredAttributes
  * @throws Exception
  */
-function validate_post_data_array($data, $requiredAttributes=[]) {
+function validatePostDataArray($data, $requiredAttributes=[]) {
     if(!is_object($data))
         throw new Exception("Invalid top level data: not an object",400);
 
@@ -413,7 +382,7 @@ function validate_post_data_array($data, $requiredAttributes=[]) {
         $entries = $data->data;
 
         foreach ($entries as $entry) {
-            is_valid_post_data_entry($entry, $requiredAttributes);
+            isValidPostDataEntry($entry, $requiredAttributes);
         }
     }
 }
@@ -425,7 +394,7 @@ function validate_post_data_array($data, $requiredAttributes=[]) {
  * @param array $requiredAttributes
  * @throws Exception
  */
-function is_valid_post_data_entry($entry,$requiredAttributes=[]) {
+function isValidPostDataEntry($entry, $requiredAttributes=[]) {
     if(!is_object($entry))
         throw new Exception("Data entry not an object",400);
 

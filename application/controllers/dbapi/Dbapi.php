@@ -205,11 +205,12 @@ class Dbapi extends CI_Controller
             $profileFIle = "/clients/$apiKey.php";
         }
 
+        $permissions = [];
         /** @noinspection PhpIncludeInspection */
-        $permissions = require($apiConfigDir.$profileFIle);
-        if(!isset($permissions)) {
-            HttpResp::server_error("Invalid API permissions");
-        }
+//        $permissions = require($apiConfigDir.$profileFIle);
+//        if(!isset($permissions)) {
+//            HttpResp::server_error("Invalid API permissions");
+//        }
 
         // todo configure settings
         $settings = [];
@@ -218,6 +219,7 @@ class Dbapi extends CI_Controller
 
         $apiCfg = array_merge_recursive($permissions,$structure);
 
+//        print_r($apiCfg);
 
         /**
          * @var CI_DB_pdo_driver db
@@ -308,7 +310,7 @@ class Dbapi extends CI_Controller
 
         // & validate it
         try{
-            validate_post_data_array($this->inputData);
+            validatePostDataArray($this->inputData);
         }
         catch (Exception $exception) {
             $errors = JSONApi\Error::from_exception($exception);
@@ -390,7 +392,7 @@ class Dbapi extends CI_Controller
             $postData = $this->inputData;
 
             try {
-                validate_post_data($postData);
+                validatePostData($postData);
             } catch (Exception $exception) {
                 HttpResp::jsonapi_out($exception->getCode(), \JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
 
@@ -479,7 +481,7 @@ class Dbapi extends CI_Controller
 
         if($this->input->get("where")) {
             $this->load->helper("where");
-            $queryParas["custom_where"] = parse_where($this->input->get("where"));
+            $queryParas["custom_where"] = parseStrAsWhere($this->input->get("where"));
         }
 
 
@@ -510,7 +512,7 @@ class Dbapi extends CI_Controller
 
         // get sort
         if($sortQry=$this->input->get("sort"))
-            $queryParas["order"] = get_sort($sortQry,$resName);
+            $queryParas["order"] = getSort($sortQry,$resName);
 
 
         // get onduplicate behaviour and fields to update
@@ -603,6 +605,7 @@ class Dbapi extends CI_Controller
      */
     function getRecords($resourceName, $recId=null, $queryParameters=null)
     {
+
         $doc = \JSONApi\Document::create($this->JsonApiDocOptions);
 
         if(is_null($queryParameters))
@@ -869,7 +872,7 @@ class Dbapi extends CI_Controller
 
         // validate POST data
         try{
-            validate_post_data($input);
+            validatePostData($input);
         }
         catch (Exception $exception) {
             HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
@@ -885,7 +888,7 @@ class Dbapi extends CI_Controller
         // configure fields to be updated when onduplicate is set to "update"
         $updateFields = [];
         if($onDuplicate=="update") {
-            $updateFields = get_fields_to_update($this->input,$tableName);
+            $updateFields = getFieldsToUpdate($this->input,$tableName);
             if(!count($updateFields))
                 $onDuplicate = null;
         }
