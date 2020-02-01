@@ -177,7 +177,7 @@ class Dbapi extends CI_Controller
         if(!is_dir($apiConfigDir)) {
             // API Not found
             // TODO: log to applog (API not found)
-            HttpResp::json_out(404);
+            HttpResp::json_out(500,"Invalid API config dir $apiConfigDir");
         }
         $this->apiConfigDir = $apiConfigDir;
 
