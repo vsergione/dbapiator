@@ -564,8 +564,8 @@ class Records {
                 throw new \Exception("Required attribute '$fldName' not provided",400);
 
             // field not allowed to insert
-            if(in_array($fldName,$attributesNames) && !$fldSpec["insert"])
-                throw new \Exception("Attribute '$fldName' not allowed to be inserted",400);
+            if(!$this->dm->field_is_insertable($resName,$fldName) && in_array($fldName,$attributesNames))
+                throw new \Exception("Attribute '$resName/$fldName' not allowed to be inserted",400);
         }
 
         foreach($attributes as $attrName=> $attrVal) {
@@ -800,7 +800,7 @@ class Records {
                         // => perform an update with the id of the newly created object for the FK field
                         case "ResourceIndicatorObject":
                             // update related record
-                            if(!$relSpec["update"])
+                            if($this->dm->resource_allow_update($relSpec["table"]))
                                 throw new \Exception("Not allowed to update relationship of type $relName",403);
                             $rel->attributes = (object) [
                                 $relSpec["field"]=>$newRecId
@@ -812,7 +812,7 @@ class Records {
                             // data is of newResourceObject type => new related record must be created
                         case "newResourceObject":
                             // insert new related record
-                            if(!$relSpec["insert"])
+                            if($this->dm->resource_allow_insert($relSpec["table"]))
                                 throw new \Exception("Not allowed to update relationship of type $relName",403);
                             if(!in_array($newPath,$includes))
                                 $includes[] = $newPath;
