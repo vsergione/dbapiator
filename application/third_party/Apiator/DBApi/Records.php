@@ -166,7 +166,6 @@ class Records {
             $related_table = $fkRel["table"];
             $related_table_field = $fkRel["field"];
 
-
             // check if joined resource already there and if not create it
             if(!array_key_exists($relation_name,$parent["includes"])) {
                 $parent["includes"][$relation_name] = [
@@ -376,7 +375,6 @@ class Records {
                     "type"=>"array"
 
                 ];
-
                 list($rec->relationships->$fk->data,$rec->relationships->$fk->total) = $this->getRecords($incNode["table"],[
                     "filter"=>$filter,
                     "limit"=>$this->maxNoRels
@@ -478,12 +476,13 @@ class Records {
             "fields" => [],
             "filter"=>[],
             "offset"=>0,
-            "limit"=>$cfgLimit,
+            "limit"=>null,
             "order"=>[]
         ];
 
         $opts = (object) array_merge($defaultOpts,$opts);
-//        print_r($opts);
+        $opts->limit = $opts->limit?$opts->limit:$cfgLimit;
+
         if(!property_exists($opts,"custom_where")) {
             $whereStr = $this->generateWhereSQL($opts->filter,$tableName);
         }
@@ -516,7 +515,7 @@ class Records {
         // generate SQL parts & relation tree
         $ttt = $this->generateSqlParts($tableName,$opts->includeStr,$opts->fields);
         list($select,$join,$relTree) = $ttt;
-//        print_r($relTree);
+        //print_r($relTree);
         // prepare ORDER BY part
         $orderStr = $this->generateSortSQL($opts->order,$tableName);
 
@@ -801,7 +800,7 @@ class Records {
                         case "ResourceIndicatorObject":
                             // update related record
                             if($this->dm->resource_allow_update($relSpec["table"]))
-                                throw new \Exception("Not allowed to update relationship of type $relName",403);
+                                throw new \Exception("Not allowed to update relationship of type $relName 1",403);
                             $rel->attributes = (object) [
                                 $relSpec["field"]=>$newRecId
                             ];
@@ -812,8 +811,8 @@ class Records {
                             // data is of newResourceObject type => new related record must be created
                         case "newResourceObject":
                             // insert new related record
-                            if($this->dm->resource_allow_insert($relSpec["table"]))
-                                throw new \Exception("Not allowed to update relationship of type $relName",403);
+                            if(!$this->dm->resource_allow_insert($relSpec["table"]))
+                                throw new \Exception("Not allowed to update relationship of type $relName 2",403);
                             if(!in_array($newPath,$includes))
                                 $includes[] = $newPath;
                             $rel->attributes->$fkFld = $newRecId;

@@ -133,9 +133,9 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)"]["post"] = "$controller/createSingleRecord/
 //$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getSingleRecord/$1/$2";
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRecords/$1/$2";
 // #7
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/update_single_record/$1/$2";
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/updateSingleRecord/$1/$2";
 // #8
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["delete"] = "$controller/delete_single_record/$1/$2";
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["delete"] = "$controller/deleteSingleRecord/$1/$2";
 
 
 // third family: /resourceName/id/_relationships/relation

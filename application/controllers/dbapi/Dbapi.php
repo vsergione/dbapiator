@@ -107,8 +107,8 @@ class Dbapi extends CI_Controller
             $this->getMultipleRecords();
             $this->getSingleRecord();
             $this->createSingleRecord();
-            $this->update_single_record();
-            $this->delete_single_record();
+            $this->updateSingleRecord();
+            $this->deleteSingleRecord();
             $this->getRelationship();
             $this->getRelated();
             $this->create_relationship();
@@ -274,7 +274,7 @@ class Dbapi extends CI_Controller
      * @return mixed|null
      * @throws Exception
      */
-    private function get_input_data()
+    private function getInputData()
     {
         if(!isset($_SERVER["CONTENT_TYPE"]))
             throw new Exception("Missing Content-Type",400);
@@ -329,7 +329,7 @@ class Dbapi extends CI_Controller
                 continue;
 
             try {
-                $ids[] = $this->update_single_record($item->type, $item->id, $item);
+                $ids[] = $this->updateSingleRecord($item->type, $item->id, $item);
             }
             catch (Exception $e) {
                 $exceptions[] = new Exception("Failed to update record number $idx: ".$e->getMessage(),$e->getCode());
@@ -383,7 +383,7 @@ class Dbapi extends CI_Controller
      * @throws Exception
      * @todo validate it
      */
-    function update_single_record($resourceName, $recId, $updateData=null)
+    function updateSingleRecord($resourceName, $recId, $updateData=null)
     {
         $internal = true;
 
@@ -530,12 +530,13 @@ class Dbapi extends CI_Controller
         return $queryParas;
     }
 
+
+
     /**
      * retrieves data from the database according with the provided parameters and outputs it to the client as JSON
      * processes a GET requests for /api/$apiId/$resName
-     * @param string $resourceName
+     * @param $resourceName
      * @param null $queryParameters
-     * @deprecated
      */
     function getMultipleRecords($resourceName, $queryParameters=null)
     {
@@ -857,7 +858,7 @@ class Dbapi extends CI_Controller
         // get input data
         try {
             if(is_null($input))
-                $input = $this->get_input_data();
+                $input = $this->getInputData();
         }
         catch (Exception $exception) {
             HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
@@ -950,7 +951,7 @@ class Dbapi extends CI_Controller
      * @param $tableName
      * @param $recId
      */
-    function delete_single_record($tableName, $recId)
+    function deleteSingleRecord($tableName, $recId)
     {
 
         try {
@@ -1008,7 +1009,6 @@ function custom_where($str) {
             ];
         }
     }
-
     $str = urldecode($str);
     $str = str_replace("&&", "' AND ",$str);
     $str = str_replace("||", "' OR ",$str);

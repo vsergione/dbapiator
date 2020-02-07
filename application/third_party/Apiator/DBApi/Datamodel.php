@@ -491,8 +491,12 @@ class Datamodel {
                     return $value;
                 break;
             case "timestamp":
-                if(preg_match("/^\d{4}\-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/i",$value))
+                if(preg_match("/^\d{4}\-\d{2}-\d{2}( \d{2}:\d{2}:\d{2}){0,1}$/i",$value)) {
+                    log_message("debug","valid timestamp ".$value);
                     return $value;
+                }
+                log_message("debug","invalid timestamp ".$value);
+
                 break;
             case "time":
                 if(preg_match("/^\-?\d{2,3}:\d{2}:\d{2}$/i",$value))
@@ -638,6 +642,7 @@ class Datamodel {
         }
 
         foreach($attributes as $attrName=> $attrVal) {
+            // todo: validate when value is null against allow null
             $attrVal = $this->is_valid_value($resName,$attrName,$attrVal);
 
             /**
