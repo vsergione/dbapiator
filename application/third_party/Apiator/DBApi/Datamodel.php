@@ -629,7 +629,7 @@ class Datamodel {
 
         foreach($this->dataModel[$resName]["fields"] as $fldName=> $fldSpec) {
             if($fldSpec["required"] && is_null($fldSpec["default"]) && !in_array($fldName,$attributesNames) && $operation=="ins")
-                throw new \Exception("Required attribute '$fldName' not provided",400);
+                throw new \Exception("Required attribute '$fldName' of '$resName' not provided",400);
 
             // field not allowed to insert
             if(in_array($fldName,$attributesNames) && !$this->field_is_insertable($resName,$fldName) && $operation=="ins")

@@ -560,7 +560,7 @@ class Records {
 
         foreach($this->dm->getResourceFields($resName) as $fldName=> $fldSpec) {
             if($fldSpec["required"] && is_null($fldSpec["default"]) && !in_array($fldName,$attributesNames))
-                throw new \Exception("Required attribute '$fldName' not provided",400);
+                throw new \Exception("Required attribute '$fldName' of '$resName' not provided",400);
 
             // field not allowed to insert
             if(!$this->dm->field_is_insertable($resName,$fldName) && in_array($fldName,$attributesNames))
