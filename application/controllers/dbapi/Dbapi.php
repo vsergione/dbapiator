@@ -417,7 +417,7 @@ class Dbapi extends CI_Controller
         }
 
         // validate if record ID from input matches the one from URL
-        if($recId!==$updateData->id) {
+        if($recId!==@$updateData->id) {
             $exception = new Exception("Record ID mismatch",400);
             if($internal)
                 throw $exception;

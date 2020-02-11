@@ -814,6 +814,10 @@ return [
                     [
                         "table"=> "orders_items",
                         "field"=> "order_id"
+                    ],
+                    [
+                        "table"=> "receipts",
+                        "field"=> "order"
                     ]
                 ]
             ],
@@ -928,7 +932,7 @@ return [
                     "length"=> "1"
                 ],
                 "iskey"=> false,
-                "required"=> false,
+                "required"=> true,
                 "default"=> "0"
             ]
         ],
@@ -952,6 +956,11 @@ return [
             "orders_items"=> [
                 "table"=> "orders_items",
                 "field"=> "order_id",
+                "type"=> "inbound"
+            ],
+            "receipts"=> [
+                "table"=> "receipts",
+                "field"=> "order",
                 "type"=> "inbound"
             ]
         ]
@@ -1085,7 +1094,7 @@ return [
                     "proto"=> "text"
                 ],
                 "iskey"=> false,
-                "required"=> true,
+                "required"=> false,
                 "default"=> null
             ]
         ],
@@ -1320,6 +1329,10 @@ return [
                     [
                         "table"=> "orders",
                         "field"=> "partner"
+                    ],
+                    [
+                        "table"=> "receipts",
+                        "field"=> "customer"
                     ]
                 ]
             ],
@@ -1758,103 +1771,13 @@ return [
                 "table"=> "orders",
                 "field"=> "partner",
                 "type"=> "inbound"
+            ],
+            "receipts"=> [
+                "table"=> "receipts",
+                "field"=> "customer",
+                "type"=> "inbound"
             ]
         ]
-    ],
-    "payments"=> [
-        "fields"=> [
-            "id"=> [
-                "description"=> "",
-                "name"=> "id",
-                "comment"=> "",
-                "type"=> [
-                    "proto"=> "int",
-                    "length"=> "10"
-                ],
-                "iskey"=> true,
-                "required"=> false,
-                "default"=> null
-            ],
-            "type"=> [
-                "description"=> "",
-                "name"=> "type",
-                "comment"=> "",
-                "type"=> [
-                    "proto"=> "enum",
-                    "vals"=> [
-                        "receipt",
-                        "pos_receipt"
-                    ]
-                ],
-                "iskey"=> false,
-                "required"=> true,
-                "default"=> null
-            ],
-            "doc_id"=> [
-                "description"=> "",
-                "name"=> "doc_id",
-                "comment"=> "",
-                "type"=> [
-                    "proto"=> "varchar",
-                    "length"=> "45"
-                ],
-                "iskey"=> true,
-                "required"=> false,
-                "default"=> null
-            ],
-            "amount"=> [
-                "description"=> "",
-                "name"=> "amount",
-                "comment"=> "",
-                "type"=> [
-                    "proto"=> "varchar",
-                    "length"=> "45"
-                ],
-                "iskey"=> false,
-                "required"=> false,
-                "default"=> null
-            ],
-            "order"=> [
-                "description"=> "",
-                "name"=> "order",
-                "comment"=> "",
-                "type"=> [
-                    "proto"=> "int",
-                    "length"=> "10"
-                ],
-                "iskey"=> false,
-                "required"=> false,
-                "default"=> null
-            ],
-            "customer"=> [
-                "description"=> "",
-                "name"=> "customer",
-                "comment"=> "",
-                "type"=> [
-                    "proto"=> "int",
-                    "length"=> "10"
-                ],
-                "iskey"=> false,
-                "required"=> false,
-                "default"=> null
-            ],
-            "date"=> [
-                "description"=> "",
-                "name"=> "date",
-                "comment"=> "",
-                "type"=> [
-                    "proto"=> "timestamp"
-                ],
-                "iskey"=> false,
-                "required"=> false,
-                "default"=> "CURRENT_TIMESTAMP"
-            ]
-        ],
-        "name"=> "payments",
-        "description"=> "",
-        "comment"=> "",
-        "type"=> "table",
-        "keyFld"=> "id"
     ],
     "product_items"=> [
         "fields"=> [
@@ -2387,6 +2310,123 @@ return [
                 "field"=> "id",
                 "type"=> "outbound",
                 "fkfield"=> "product_id"
+            ]
+        ]
+    ],
+    "receipts"=> [
+        "fields"=> [
+            "id"=> [
+                "description"=> "",
+                "name"=> "id",
+                "comment"=> "",
+                "type"=> [
+                    "proto"=> "int",
+                    "length"=> "10"
+                ],
+                "iskey"=> true,
+                "required"=> false,
+                "default"=> null
+            ],
+            "type"=> [
+                "description"=> "",
+                "name"=> "type",
+                "comment"=> "",
+                "type"=> [
+                    "proto"=> "enum",
+                    "vals"=> [
+                        "cash_receipt",
+                        "pos_receipt",
+                        "bank"
+                    ]
+                ],
+                "iskey"=> false,
+                "required"=> true,
+                "default"=> null
+            ],
+            "doc_id"=> [
+                "description"=> "",
+                "name"=> "doc_id",
+                "comment"=> "",
+                "type"=> [
+                    "proto"=> "varchar",
+                    "length"=> "45"
+                ],
+                "iskey"=> true,
+                "required"=> false,
+                "default"=> null
+            ],
+            "amount"=> [
+                "description"=> "",
+                "name"=> "amount",
+                "comment"=> "",
+                "type"=> [
+                    "proto"=> "float"
+                ],
+                "iskey"=> false,
+                "required"=> false,
+                "default"=> null
+            ],
+            "order"=> [
+                "description"=> "",
+                "name"=> "order",
+                "comment"=> "",
+                "type"=> [
+                    "proto"=> "int",
+                    "length"=> "10"
+                ],
+                "iskey"=> false,
+                "required"=> false,
+                "default"=> null,
+                "foreignKey"=> [
+                    "table"=> "orders",
+                    "field"=> "id"
+                ]
+            ],
+            "customer"=> [
+                "description"=> "",
+                "name"=> "customer",
+                "comment"=> "",
+                "type"=> [
+                    "proto"=> "int",
+                    "length"=> "10"
+                ],
+                "iskey"=> false,
+                "required"=> false,
+                "default"=> null,
+                "foreignKey"=> [
+                    "table"=> "partners",
+                    "field"=> "id"
+                ]
+            ],
+            "date"=> [
+                "description"=> "",
+                "name"=> "date",
+                "comment"=> "",
+                "type"=> [
+                    "proto"=> "timestamp"
+                ],
+                "iskey"=> false,
+                "required"=> false,
+                "default"=> "CURRENT_TIMESTAMP"
+            ]
+        ],
+        "name"=> "receipts",
+        "description"=> "",
+        "comment"=> "",
+        "type"=> "table",
+        "keyFld"=> "id",
+        "relations"=> [
+            "customer"=> [
+                "table"=> "partners",
+                "field"=> "id",
+                "type"=> "outbound",
+                "fkfield"=> "customer"
+            ],
+            "order"=> [
+                "table"=> "orders",
+                "field"=> "id",
+                "type"=> "outbound",
+                "fkfield"=> "order"
             ]
         ]
     ],
