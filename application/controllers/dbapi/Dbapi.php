@@ -514,7 +514,6 @@ class Dbapi extends CI_Controller
         if($sortQry=$this->input->get("sort"))
             $queryParas["order"] = getSort($sortQry,$resName);
 
-
         // get onduplicate behaviour and fields to update
         if($ondupe=$this->input->get("onduplicate")) {
             if(!in_array($ondupe,["update","ignore","error"]))

@@ -246,6 +246,8 @@ function get_filter($rawFilterStr, $defaultTable)
 function getSort($str, $defaultTable)
 {
     // generate sort array
+    if(!is_string($str))
+        return [];
     $arr = explode(",",$str);
     foreach($arr as $item) {
         $dir = substr($item,0,1)=="-"?"DESC":"ASC";
@@ -257,6 +259,7 @@ function getSort($str, $defaultTable)
             "dir" => $dir
         ];
     }
+    //print_r($sort);
     return $sort;
 }
 

@@ -281,7 +281,7 @@ class Records {
      * @return null|\stdClass
      * @throws \Exception
      */
-    private function parseResultRow($node, $row, &$allRecs)
+    private function parseResultRow($node, $row, &$allRecs,$options=[])
     {
 //        print_r($row);
         $rec = null;
@@ -375,10 +375,10 @@ class Records {
                     "type"=>"array"
 
                 ];
-                list($rec->relationships->$fk->data,$rec->relationships->$fk->total) = $this->getRecords($incNode["table"],[
-                    "filter"=>$filter,
-                    "limit"=>$this->maxNoRels
-                ]);
+                $options = (array)$options;
+                $options["filter"] = $filter;
+                $options["limit"] = $this->maxNoRels;
+                list($rec->relationships->$fk->data,$rec->relationships->$fk->total) = $this->getRecords($incNode["table"],$options);
             }
         }
         return $rec;
@@ -480,14 +480,14 @@ class Records {
             "order"=>[]
         ];
 
-        $opts = (object) array_merge($defaultOpts,$opts);
-        $opts->limit = $opts->limit?$opts->limit:$cfgLimit;
+        $opts = array_merge($defaultOpts,$opts);
+        $opts['limit'] = $opts['limit']?$opts['limit']:$cfgLimit;
 
-        if(!property_exists($opts,"custom_where")) {
-            $whereStr = $this->generateWhereSQL($opts->filter,$tableName);
+        if(!array_key_exists("custom_where",$opts)) {
+            $whereStr = $this->generateWhereSQL($opts['filter'],$tableName);
         }
         else {
-            $whereStr = $opts->custom_where;
+            $whereStr = $opts['custom_where'];
         }
 
 
@@ -499,8 +499,8 @@ class Records {
         if($totalRecs==0) return [[],0];
 
         // prepare field selection (validate and ....
-        foreach ($opts->fields as $res=>$fldsStr) {
-            $opts->fields[$res] = [];
+        foreach ($opts['fields'] as $res=>$fldsStr) {
+            $opts['fields'][$res] = [];
             $tmp = explode(",",$fldsStr);
             foreach ($tmp as $fld) {
                 if($this->dm->is_valid_field($res,$fld))
@@ -508,30 +508,30 @@ class Records {
                 else
                     throw new \Exception("Invalid field name $res.$fld",401);
             }
-            if(empty($opts->fields[$res]))
-                unset($opts->fields[$res]);
+            if(empty($opts['fields'][$res]))
+                unset($opts['fields'][$res]);
         }
 
         // generate SQL parts & relation tree
-        $ttt = $this->generateSqlParts($tableName,$opts->includeStr,$opts->fields);
+        $ttt = $this->generateSqlParts($tableName,$opts['includeStr'],$opts['fields']);
         list($select,$join,$relTree) = $ttt;
         //print_r($relTree);
         // prepare ORDER BY part
-        $orderStr = $this->generateSortSQL($opts->order,$tableName);
+        $orderStr = $this->generateSortSQL($opts['order'],$tableName);
 
         // compile SELECT
         $mainSql = "SELECT $select FROM `{$relTree[$tableName]["name"]}` AS `{$relTree[$tableName]["alias"]}` "
             .($join!==""?$join:"")
             ." WHERE $whereStr"
             ." ORDER BY $orderStr"
-            ." LIMIT $opts->offset, $opts->limit";
-//        echo $mainSql."\n";
+            ." LIMIT {$opts['offset']}, {$opts['limit']}";
+        //echo $mainSql."\n";
 
 
         // run query
         /** @var \CI_DB_result $res */
         $res = $this->dbdrv->query($mainSql);
-        get_instance()->debug_log($mainSql);
+        //get_instance()->debug_log($mainSql);
 
         $rows = $res->result_array_num();
 
@@ -539,9 +539,10 @@ class Records {
         // parse result
         $allRecs = [];
         foreach ($rows as $row) {
-            $newRec = $this->parseResultRow($relTree[$resourceName],$row,$allRecs);
+            $newRec = $this->parseResultRow($relTree[$resourceName],$row,$allRecs,$opts);
             $recordSet[] = $newRec;
         }
+        //echo  $mainSql."\n";
 
 
         return [$recordSet,$totalRecs];
@@ -600,7 +601,7 @@ class Records {
 
         //$table = $data->type;
         if($data->type!=$table)
-            throw new \Exception("Invalid data type '$table'",400);
+            throw new \Exception("Invalid data type '$data->type' '$table'",400);
 
         // check if resource exists
         if(!$this->dm->resource_exists($table))

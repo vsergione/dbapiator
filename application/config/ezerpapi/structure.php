@@ -116,6 +116,18 @@ return [
     ],
     "config_doc_numbers"=> [
         "fields"=> [
+	    "id"=> [
+                "description"=> "",
+                "name"=> "id",
+                "comment"=> "",
+                "type"=> [
+                    "proto"=> "int",
+                    "length"=> "10"
+                ],
+                "iskey"=> true,
+                "required"=> false,
+                "default"=> null
+            ],
             "doc_type"=> [
                 "description"=> "",
                 "name"=> "doc_type",
@@ -179,7 +191,7 @@ return [
         "description"=> "",
         "comment"=> "",
         "type"=> "table",
-        "keyFld"=> "valid_from"
+        "keyFld"=> "id"
     ],
     "config_invoice_series"=> [
         "fields"=> [
@@ -1805,6 +1817,18 @@ return [
                 "required"=> true,
                 "default"=> "0"
             ],
+            "grouping"=> [
+                "description"=> "",
+                "name"=> "grouping",
+                "comment"=> "",
+                "type"=>  [
+                    "proto"=> "varchar",
+                    "length"=> "200"
+                ],
+                "iskey"=> false,
+                "required"=> false,
+                "default"=> null
+            ],
             "product_id"=> [
                 "description"=> "",
                 "name"=> "product_id",
@@ -2291,7 +2315,20 @@ return [
                 "iskey"=> false,
                 "required"=> false,
                 "default"=> "0"
+            ],
+            "grouping"=> [
+                "description"=> "",
+                "name"=> "grouping",
+                "comment"=> "",
+                "type"=>  [
+                    "proto"=> "varchar",
+                    "length"=> "200"
+                ],
+                "iskey"=> false,
+                "required"=> false,
+                "default"=> null
             ]
+
         ],
         "name"=> "products_structure",
         "description"=> "",
