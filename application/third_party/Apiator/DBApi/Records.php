@@ -9,7 +9,7 @@ namespace Apiator\DBApi;
 require_once(__DIR__."/../../../libraries/Errors.php");
 require_once(__DIR__.'/../../../libraries/RecordSet.php');
 
-$req = require_once (APPPATH."/third_party/JSONApi/Autoloader.php");
+require_once (APPPATH."/third_party/JSONApi/Autoloader.php");
 
 use http\Exception;
 use JSONApi\Autoloader;
@@ -73,16 +73,14 @@ class Records {
      * @return array
      * @throws \Exception
      */
-    private function generateSqlParts($top, $includeStr, array $fields)
+    private function generateSqlParts($top, &$includes, array $fields)
     {
-        // parse & prepare includes
-        $includeStr = trim($includeStr);
-        $includes = $includeStr===""?[]:explode(",",$includeStr);
-
         sort($includes);
         for($i=0;$i<count($includes);$i++) {
-            $includes[$i] = explode(".",$includes[$i]);
+            if(is_string($includes[$i]))
+                $includes[$i] = explode(".",$includes[$i]);
         }
+
 
         // init relationTree with top element
         try {
@@ -113,9 +111,17 @@ class Records {
 
 
         // populate relationTree tree by processing includes
-        foreach ($includes as $include) {
+        $newInclude = [];
+        foreach($includes  as $include) {
+            if(!count($include))
+                continue;
             $this->processIncludes($relationTree[$top],$include,$fields);
+            if(count($include))
+                $newInclude[] = $include;
         }
+        $includes = $newInclude;
+
+
 
         $select = [];
         $join = [];
@@ -140,15 +146,10 @@ class Records {
      * @param $fields
      * @throws \Exception
      */
-    private function processIncludes(&$parent, $include, $fields)
+    private function processIncludes(&$parent, &$include, $fields)
     {
         $parent_table = $parent["name"];
         $parent_alias = $parent["alias"];
-
-        // if empty includes return
-        if(!count($include)) {
-            return;
-        }
 
         // extract current level (first element of the array)
         $relation_name = array_shift($include);
@@ -198,7 +199,8 @@ class Records {
                 $parent["select"][] = $relation_name;
             }
 
-            $this->processIncludes($parent["includes"][$relation_name],$include,$fields);
+            if(count($include))
+                $this->processIncludes($parent["includes"][$relation_name],$include,$fields);
         }
         catch (\Exception $exception) {
             //print_r($exception);
@@ -303,6 +305,7 @@ class Records {
             // record not yet saved in allRecs -> need to extract it
 
             $attributes = new \stdClass();
+
             $relationships = [];
 
             // parse record and populate attributes or relationship
@@ -350,7 +353,6 @@ class Records {
 
         if(!isset($node["includes"]) || count($node["includes"])==0)
             return $rec;
-
 
         foreach($node["includes"] as $fk=>$incNode) {
             if(!isset($rec->relationships->$fk))
@@ -453,6 +455,7 @@ class Records {
      */
     function getRecords($resourceName, $opts=[])
     {
+
         // check if resource exists
         if(!$this->dm->resource_exists($resourceName))
             throw new \Exception("Resource '$resourceName' not found",404);
@@ -472,7 +475,7 @@ class Records {
 
         // prepare parameters
         $defaultOpts = [
-            "includeStr" => "",
+            "includeStr" => [],
             "fields" => [],
             "filter"=>[],
             "offset"=>0,
@@ -494,7 +497,7 @@ class Records {
         // extract total number of records matched by the query
         $countSql = "SELECT count(*) as `cnt` FROM `$tableName` WHERE $whereStr";
         $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
-
+//        echo $countSql;
         // return if no records matched
         if($totalRecs==0) return [[],0];
 
@@ -513,9 +516,15 @@ class Records {
         }
 
         // generate SQL parts & relation tree
+        if(is_string($opts['includeStr'])) {
+            $includeStr = trim($opts['includeStr']);
+            $opts['includeStr'] = $includeStr===""?[]:explode(",",$includeStr);
+        }
+
         $ttt = $this->generateSqlParts($tableName,$opts['includeStr'],$opts['fields']);
         list($select,$join,$relTree) = $ttt;
-        //print_r($relTree);
+//        echo "\n\n$tableName reltree\n";
+//        print_r($relTree);
         // prepare ORDER BY part
         $orderStr = $this->generateSortSQL($opts['order'],$tableName);
 
@@ -542,7 +551,6 @@ class Records {
             $newRec = $this->parseResultRow($relTree[$resourceName],$row,$allRecs,$opts);
             $recordSet[] = $newRec;
         }
-        //echo  $mainSql."\n";
 
 
         return [$recordSet,$totalRecs];
@@ -965,7 +973,7 @@ class Records {
      * @return bool
      * @throws \Exception
      */
-    function delete($tableName, $recId) {
+    function deleteById($tableName, $recId) {
         // check if resource exists
         if(!$this->dm->resource_exists($tableName))
             throw new \Exception("Resource '$tableName' not found",404);
@@ -981,6 +989,28 @@ class Records {
             return true;
         }
         throw new \Exception("Record not found",404);
+    }
+
+    /**
+     * @param string $tableName
+     * @param array $where
+     * @return bool
+     * @throws \Exception
+     */
+    function deleteByWhere($tableName,$where) {
+        // check if resource exists
+        if(!$this->dm->resource_exists($tableName))
+            throw new \Exception("Resource '$tableName' not found",404);
+
+        if(!$this->dm->resource_allow_delete($tableName))
+            throw new \Exception("Not authorized to delete from $tableName",401);
+
+        $this->dbdrv->where($where);
+        $this->dbdrv->delete($tableName);
+        if($this->dbdrv->affected_rows())
+            return true;
+
+        throw new \Exception("Records not found",404);
     }
 
     /**

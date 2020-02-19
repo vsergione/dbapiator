@@ -14,7 +14,8 @@ application/controllers/Home.php
 application/controllers/Mytest.php
 application/controllers/oauth
 cli/connection.php
-application/config/ezerpapi/*
+application/config/ezerpapi
+application/config/ezerpapi/structure.php
 
 cli/structure.php
 

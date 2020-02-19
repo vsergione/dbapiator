@@ -790,6 +790,59 @@ class Dbapi extends CI_Controller
 
     }
 
+    function deleteRelated($resourceName, $recId, $relationName, $relRecId){
+        $rel = $this->apiDm->get_relation_config($resourceName,$relationName);
+        if(!$rel)
+            HttpResp::not_found("RecordID $recId of $resourceName not found");
+        $where = [
+            $this->apiDm->get_idfld($rel["table"]) => $relRecId,
+            $rel["field"] => $recId
+        ];
+//        print_r($where);
+//        HttpResp::not_found("RecordID $recId of $resourceName not found");#
+
+        try {
+            $this->recs->deleteByWhere($rel["table"],$where);
+            HttpResp::no_content(204);
+        }
+        catch (Exception $exception) {
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
+        }
+
+    }
+
+
+    /**
+     * @param $resourceName
+     * @param $recId
+     * @param $relationName
+     * @param $relRecId
+     * @throws Exception
+     */
+    function updateRelated($resourceName, $recId, $relationName, $relRecId) {
+        $rel = $this->apiDm->get_relation_config($resourceName,$relationName);
+        if(!$rel)
+            HttpResp::not_found("RecordID $recId of $resourceName not found");
+
+        $this->updateSingleRecord($rel["table"],$relRecId);
+    }
+
+    /**
+     * @param $resourceName
+     * @param $recId
+     * @param $relationName
+     * @throws Exception
+     */
+    function createRelated($resourceName, $recId, $relationName) {
+        $rel = $this->apiDm->get_relation_config($resourceName,$relationName);
+        if(!$rel)
+            HttpResp::not_found("RecordID $recId of $resourceName not found");
+
+        $input = $this->getInputData();
+        $fld = $rel["field"];
+        $input->data->attributes->$fld = $recId;
+        $this->createSingleRecord($rel["table"],$input);
+    }
     /**
      * fetch related resource(s)
      * @param string $resourceName parent record resource type
@@ -797,7 +850,7 @@ class Dbapi extends CI_Controller
      * @param string $relationName related resource name
      * @throws Exception
      */
-    function getRelated($resourceName, $recId, $relationName)
+    function getRelated($resourceName, $recId, $relationName, $relRecId=null)
     {
         // detect relation type
         try {
@@ -815,19 +868,21 @@ class Dbapi extends CI_Controller
         $filterStr = $this->apiDm->getPrimaryKey($resourceName)."=$recId";
         $filter = get_filter($filterStr,$resourceName);
         $parent = null;
+
         // fetch parent record
         try {
-            list($records, $count) = $this->recs->getRecords($resourceName, [
-                "filter"=> $filter
-            ]);
+            if($relationType=="outbound") {
+                list($records, $count) = $this->recs->getRecords($resourceName, [
+                    "filter" => $filter
+                ]);
 
-            if(!$count) {
-                HttpResp::not_found("RecordID $recId of $resourceName not found");
-            }
-            $parent = $records[0];
-//            print_r($parent->relationships->$relationName);
-            if($relationType=="outbound")
+                if (!$count)
+                    HttpResp::not_found("RecordID $recId of $resourceName not found");
+
+                $parent = $records[0];
                 $fkId = $parent->relationships->$relationName->data->id;
+            }
+
         }
         catch (Exception $exception) {
             HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
@@ -835,9 +890,9 @@ class Dbapi extends CI_Controller
 
         if($relationType=="inbound") {
             $_GET["filter"] = @$_GET["filter"] . "," . $relSpec["field"] . "=" . $recId;
-//            $this->getMultipleRecords($relSpec["table"]);
-            $this->getRecords($relSpec["table"]);
+            $this->getRecords($relSpec["table"],$relRecId);
         }
+
         if($relationType=="outbound") {
             $_GET["filter"] = $relSpec["field"]."=".$fkId;
             $this->getRecords($relSpec["table"],$fkId);
@@ -952,9 +1007,8 @@ class Dbapi extends CI_Controller
      */
     function deleteSingleRecord($tableName, $recId)
     {
-
         try {
-            $this->recs->delete($tableName, $recId);
+            $this->recs->deleteById($tableName, $recId);
             HttpResp::no_content(204);
         }
         catch (Exception $exception) {
@@ -1011,6 +1065,5 @@ function custom_where($str) {
     $str = urldecode($str);
     $str = str_replace("&&", "' AND ",$str);
     $str = str_replace("||", "' OR ",$str);
-    $str = str_replace("~=", " OR ",$str);
     return $str;
 }

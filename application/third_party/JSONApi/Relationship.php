@@ -71,7 +71,10 @@ class Relationship extends json_ready
         if(!is_null($links))
             $rs->setLinks($links);
 
-        $rs->meta = Meta::factory(["total"=>$total]);
+        if(!is_null($total))
+            $rs->meta = Meta::factory(["total"=>$total]);
+
+
 
         if($data) {
             $rs->setTotal($total);

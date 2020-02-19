@@ -109,12 +109,14 @@ class DBWalk
                 "table" => $tgtTable,
                 "field" => $tgtFld
             ];
+
             $structure[$srcTable]["relations"][$srcFld] = [
                 "table" => $tgtTable,
                 "field" => $tgtFld,
                 "type" => "outbound",
                 "fkfield"=>$srcFld
             ];
+
             $permissions[$srcTable]["relations"][$srcFld] = [
                 "insert" => true,
                 "update" => true,
@@ -133,12 +135,25 @@ class DBWalk
         foreach($structure as $tableName=>$table) {
             foreach ($table["fields"] as $fldName=>$fldSpec){
                 if(array_key_exists("foreignKey",$fldSpec)) {
-                    $structure[$fldSpec["foreignKey"]["table"]]["relations"][$tableName] = [
+                    $relName = $tableName;
+                    if(isset($structure[$fldSpec["foreignKey"]["table"]]["relations"][$tableName])) {
+                        $tmp = $structure[$fldSpec["foreignKey"]["table"]]["relations"][$tableName];
+                        $structure[$fldSpec["foreignKey"]["table"]]["relations"][$tableName."_".$tmp["field"]] = $tmp;
+                        print_r($tmp);
+                        $tmpFld = $tmp["field"];
+
+                        $tmp = $permissions[$fldSpec["foreignKey"]["table"]]["relations"][$tableName];
+                        $permissions[$fldSpec["foreignKey"]["table"]]["relations"][$tableName."_".$tmpFld] = $tmp;
+
+                        $relName = $tableName."_".$fldName;
+                    }
+
+                    $structure[$fldSpec["foreignKey"]["table"]]["relations"][$relName] = [
                         "table"=>$tableName,
                         "field"=>$fldName,
                         "type" => "inbound"
                     ];
-                    $permissions[$fldSpec["foreignKey"]["table"]]["relations"][$tableName] = [
+                    $permissions[$fldSpec["foreignKey"]["table"]]["relations"][$relName] = [
                         "insert" => true,
                         "update" => true,
                         "select" => true,

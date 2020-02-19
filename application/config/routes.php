@@ -151,7 +151,17 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+
 
 // fourth family: /resourceName/id/relation
 // #13
+// OK
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRelated/$1/$2/$3";
+// OK
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["post"] = "$controller/createRelated/$1/$2/$3";
+
+// fifth family: /resourceName/id/relation/id
+// OK
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["get"] = "$controller/getRelated/$1/$2/$3/$4";
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["patch"] = "$controller/updateRelated/$1/$2/$3/$4";
+// OK
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["delete"] = "$controller/deleteRelated/$1/$2/$3/$4";
 
 
 $route["^$stdOpsPath\/.*"]["options"] = "$controller/options";

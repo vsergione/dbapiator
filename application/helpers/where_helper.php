@@ -1,7 +1,6 @@
 <?php
 
 function parseStrAsWhere($str) {
-
     $expr = [];
     $start = 0;
     for($i=0;$i<strlen($str);$i++)
@@ -54,6 +53,7 @@ function parseExpr($str) {
 function getComparisonOperator($opStr) {
     $opMap = [
         "==" => "=",
+        "=" => "=",
         "!=" => "!=",
         "=>" => "=>",
         "<=" => "<=",
