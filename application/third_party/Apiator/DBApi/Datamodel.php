@@ -452,23 +452,23 @@ class Datamodel {
                 break;
             case "float":
                 if(is_numeric($value))
-                    $value *= 1;
+                    $value =floatval($value);
                 if(in_array(gettype($value), ["float","double","integer"]))
                     return $value;
                 break;
             case "double":
                 if(is_numeric($value)) {
-                    return $value*1;
+                    return floatval($value);
                 }
                 break;
             case "real":
                 if(is_numeric($value)) {
-                    return $value*1;
+                    return floatval($value);
                 }
                 break;
             case "bit":
                 if(is_numeric($value)) {
-                    return $value*1;
+                    return floatval($value);
                 }
                 break;
             case "boolean":
@@ -550,7 +550,7 @@ class Datamodel {
             $msg = "Field $fieldName is required";
         }
         else {
-            $msg = "Invalid type of value for field $fieldName";
+            $msg = "Invalid type of value '$value' for field $tableName.$fieldName";
         }
 
         throw new \Exception($msg,400);

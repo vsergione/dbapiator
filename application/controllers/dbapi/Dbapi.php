@@ -949,7 +949,7 @@ class Dbapi extends CI_Controller
         }
 
         // starts transaction
-        $this->apiDb->trans_strict();
+        $this->apiDb->trans_begin();
 
         // prepare data
         $entries = is_array($input->data)?$input->data:[$input->data];

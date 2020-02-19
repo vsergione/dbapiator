@@ -534,7 +534,7 @@ class Records {
             ." WHERE $whereStr"
             ." ORDER BY $orderStr"
             ." LIMIT {$opts['offset']}, {$opts['limit']}";
-        //echo $mainSql."\n";
+         //echo $mainSql."\n";
 
 
         // run query
