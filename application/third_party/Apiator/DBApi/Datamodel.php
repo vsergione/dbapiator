@@ -110,7 +110,7 @@ class Datamodel {
     {
         //print_r($this->dataModel[$resName]);
         if(!isset($this->dataModel[$resName]["fields"][$fldName]))
-            throw new \Exception("Invalid field $fldName (is_insertable)",400);
+            throw new \Exception("Invalid field $resName.$fldName (is_insertable)",400);
 
         return isset($this->dataModel[$resName]["fields"][$fldName]["insert"])?
             $this->dataModel[$resName]["fields"][$fldName]["insert"]:
