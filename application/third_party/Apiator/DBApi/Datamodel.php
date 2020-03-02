@@ -157,7 +157,7 @@ class Datamodel {
     function field_is_searchable($resName, $fldName)
     {
         if(!isset($this->dataModel[$resName]["fields"][$fldName]))
-            throw new \Exception("Invalid field $fldName (is_searchable)",400);
+            throw new \Exception("Invalid field $resName.   $fldName (is_searchable)",400);
 
         return isset($this->dataModel[$resName]["fields"][$fldName]["searchable"])?
             $this->dataModel[$resName]["fields"][$fldName]["searchable"]:
@@ -354,7 +354,7 @@ class Datamodel {
             throw new \Exception("Invalid resource $table", 400);
         if (!isset($this->dataModel[$table]["relations"])
             || !isset($this->dataModel[$table]["relations"][$relName]))
-            throw new \Exception("Invalid relationship $relName of $table");
+            throw new \Exception("Relationship $relName of $table not found",404);
 
         return $this->dataModel[$table]["relations"][$relName];
     }

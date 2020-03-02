@@ -963,7 +963,7 @@ class Dbapi extends CI_Controller
                 if(!isset($entry->type) || !isset($entry->attributes))
                     continue;
 
-                $includes = [];
+                $includes = get_include($this->input);
                 $recId = $this->recs->insert($tableName, $entry, $this->insertMaxRecursionLevel,
                                                     $onDuplicate, $updateFields,null,$includes);
 
