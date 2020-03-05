@@ -389,7 +389,7 @@ class Datamodel {
         // $boolValid = array("1"=>true,"0"=>false,1=>true,0=>false,true=>true,false=>false,"true"=>true,"false"=>false);
 
         if(!$this->is_valid_field($tableName,$fieldName))
-            throw new \Exception("Invalid field $fieldName",400);
+            throw new \Exception("Invalid field $tableName.$fieldName",400);
 
         $fields = $this->getResourceFields($tableName);
 
@@ -414,7 +414,7 @@ class Datamodel {
                 return $value;
             }
             else
-                throw new \Exception("Invalid object as field value",400);
+                throw new \Exception("Invalid object as field value for  $tableName.$fieldName",400);
 
         }
 
@@ -547,7 +547,7 @@ class Datamodel {
 
         // check if field is required but value is null and set error message accordingly
         if($fields[$fieldName]["required"] && is_null($value)) {
-            $msg = "Field $fieldName is required";
+            $msg = "Field $tableName.$fieldName is required";
         }
         else {
             $msg = "Invalid type of value '$value' for field $tableName.$fieldName";

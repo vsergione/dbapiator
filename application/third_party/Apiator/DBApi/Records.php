@@ -36,6 +36,7 @@ class Records {
      */
     private $dbdrv;
     private $maxNoRels=10;
+    private $configDir;
 
     /**
      * Records constructor.
@@ -45,7 +46,9 @@ class Records {
     function __construct($dbDriver,$dataModel) {
         $this->dm = $dataModel;
         $this->dbdrv = $dbDriver;
-        $this->maxNoRels = get_instance()->config->item("inbound_relationships_page_size");
+        $instance = get_instance();
+        $this->maxNoRels = $instance->config->item("inbound_relationships_page_size");
+        $this->configDir = $instance->config->item("api_config_dir");
     }
 
     static function init($dbDriver,$dataModel) {
@@ -386,6 +389,29 @@ class Records {
         return $rec;
     }
 
+    function getRecordById($table,$idFld,$recId,$includes=null) {
+        $opts = [
+            "filter"=>[
+                "$table.$idFld"=>
+                    (object)[
+                        "left"=>(object) [
+                            "alias"=>"$table",
+                            "field"=>"$idFld"
+                        ],
+                        "op"=>"=",
+                        "right"=>$recId
+                    ]
+            ]
+        ];
+        if($includes) {
+            $opts["includeStr"] = $includes;
+        }
+        list($recs,$total) = $this->getRecords($table,$opts);
+        if(count($recs))
+            return $recs[0];
+
+        return null;
+    }
     /**
      * @param $filters
      * @param $resName
@@ -396,7 +422,6 @@ class Records {
     {
         $whereArr = [];
         foreach ($filters as $filter) {
-
             if ($filter->left->alias == $resName
                 && $this->dm->field_is_searchable($resName, $filter->left->field)) {
                 $whereArr[] = generate_where_str($filter);
@@ -696,6 +721,7 @@ class Records {
             }
             // create 1:1 related record
             if(isset($relData->data->attributes)) {
+
                 $insertData[$relName] = $this->insert($fk->table,$relData->data,$watchDog-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
                 if(!in_array($newPath,$includes))
                     $includes[] = $newPath;
@@ -709,6 +735,12 @@ class Records {
         if(isset($tableConfig["oninsert"]) && is_callable($tableConfig["oninsert"])) {
             $insertData = $tableConfig["oninsert"]($insertData,$tableConfig);
         }
+
+
+        // before insert hook
+        $beforeInsert = @include($this->configDir."/hooks/".$table."/before.insert.php");
+        if(is_callable($beforeInsert))
+            $insertData = $beforeInsert($this,$insertData);
 
 
         // check insert data for non-scalar values and throw error in case found
@@ -751,6 +783,7 @@ class Records {
         // insert data in DB
 
         $this->dbdrv->db_debug = false;
+
         $res = $this->dbdrv->query($insSql);
 
 //        /**
@@ -767,6 +800,9 @@ class Records {
         }
 
         // retrieve resource ID (mysql specific)
+
+
+
         // todo: evaluate impact for other DB engines and implement
         $newRecId = $this->dbdrv->insert_id();
         if(!$newRecId && $this->dbdrv->affected_rows() && is_scalar($insertData[$idFld]))
@@ -789,6 +825,10 @@ class Records {
 
             $newRecId = $q->row()->$idFld;
         }
+
+        $afterInsert = @include($this->configDir."/hooks/".$table."/after.insert.php");
+        if(is_callable($afterInsert))
+            $afterInsert($this,$newRecId,$insertData);
 
         // create outbound relations
         if($newRecId && $one2nRelations) {
@@ -880,13 +920,24 @@ class Records {
             }
         }
 
+        // before insert hook
+        $beforeUpdate = @include($this->configDir."/hooks/".$table."/before.update.php");
+        if(is_callable($beforeUpdate))
+            $attributes = $beforeUpdate($this,$id,$attributes);
 
+        // configure query
         $sql = $this->dbdrv
             ->where($this->dm->getPrimaryKey($table),$id)
             ->set($attributes)
             ->get_compiled_update($table);
 
+        // perform update
         $this->dbdrv->query($sql);
+
+        // before insert hook
+        $afterUpdate = @include($this->configDir."/hooks/".$table."/after.update.php");
+        if(is_callable($afterUpdate))
+            $afterUpdate($this,$id,$attributes);
 
         if(isset($attributes[$priKey]))
             return $attributes[$priKey];
