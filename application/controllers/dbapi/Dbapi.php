@@ -371,6 +371,7 @@ class Dbapi extends CI_Controller
     {
         $internal = true;
 
+
         // input data validation
         if(is_null($updateData)) {
             $postData = $this->inputData;
@@ -383,6 +384,13 @@ class Dbapi extends CI_Controller
             }
             $updateData = $postData->data;
             $internal = false;
+        }
+
+        if(!$this->apiDm->resource_exists($resourceName)) {
+            $exception = new Exception("Resource '$resourceName' not found",404);
+            if($internal)
+                throw $exception;
+            HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
         if(gettype($updateData)!=="object") {
@@ -400,9 +408,10 @@ class Dbapi extends CI_Controller
             HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
         }
 
+
         // validate if record ID from input matches the one from URL
-        if($recId!==@$updateData->id) {
-            $exception = new Exception("Record ID mismatch",400);
+        if("".$recId!=="".@$updateData->id) {
+            $exception = new Exception("Record ID mismatch $recId vs $updateData->id",400);
             if($internal)
                 throw $exception;
             HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
@@ -411,7 +420,7 @@ class Dbapi extends CI_Controller
         // check if resource has primary key
         $resKeyFld = $this->apiDm->getPrimaryKey($resourceName);
         if(!$resKeyFld) {
-            $exception = new Exception("Cannot update by id: resource is not configured with a primary key",400);
+            $exception = new Exception("Cannot update by id: resource $resourceName is not configured with a primary key",400);
             if($internal)
                 throw $exception;
             HttpResp::jsonapi_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception));
