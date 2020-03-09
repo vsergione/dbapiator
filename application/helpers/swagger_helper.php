@@ -117,7 +117,7 @@ function search_recursive($resName,$resSpec,$path,&$fields,&$includes,&$dm,$recu
     }
 
     foreach ($resSpec["relations"] as $relName => $relSpec) {
-        if (isset($relSpec["select"]) || $relSpec["select"]) {
+        if (isset($relSpec["select"]) && $relSpec["select"]) {
             $newPath = array_merge($path,[$relName]);
             $newPathStr = implode(".",$newPath);
             if(!in_array($newPathStr,$includes)) {

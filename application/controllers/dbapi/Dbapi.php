@@ -284,14 +284,18 @@ class Dbapi extends CI_Controller
     /**
      * Update multiple records of different types with a single call
      * @param $resourceName
+     * @param null $inputData
      * @throws Exception
      * @todo to be implemented
      */
-    function updateMultipleRecords($resourceName)
+    function updateMultipleRecords($resourceName,$inputData=null)
     {
         // todo: finish it
         // extract data from RequestBody
 
+        if(!$inputData) {
+            $inputData = $this->inputData;
+        }
         // & validate it
         try{
             validatePostDataArray($this->inputData);
@@ -324,7 +328,6 @@ class Dbapi extends CI_Controller
                 $exceptions[] = new Exception("Maximum number of records to bulk update reached: "
                     .$this->config->item("bulk_update_limit"), 400);
             }
-
         }
 
         $options = [];
@@ -337,7 +340,6 @@ class Dbapi extends CI_Controller
         }
         //print_r($doc);
         HttpResp::jsonapi_out(200,$doc);
-
     }
 
 
@@ -370,7 +372,6 @@ class Dbapi extends CI_Controller
     function updateSingleRecord($resourceName, $recId, $updateData=null)
     {
         $internal = true;
-
 
         // input data validation
         if(is_null($updateData)) {
@@ -530,26 +531,33 @@ class Dbapi extends CI_Controller
      * @param $resourceName
      * @param null $queryParameters
      */
-    function getMultipleRecords($resourceName, $queryParameters=null)
-    {
-        if(is_null($queryParameters))
-            $queryParameters = $this->getQueryParameters($resourceName);
-
-        try {
-            list($records,$totalRecords) = $this->recs->getRecords($resourceName,$queryParameters);
-            //print_r($records);
-
-            $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$records);
-            $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$queryParameters["offset"],"totalRecords"=>$totalRecords]));
-            //print_r($doc);
-
-
-            HttpResp::json_out(200, $doc->json_data());
-        }
-        catch (Exception $exception) {
-            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
-        }
-    }
+//    function getMultipleRecords($resourceName, $queryParameters=null)
+//    {
+//
+//        if(!$this->apiDm->resource_exists($resourceName)) {
+//            $exception = new Exception("Resource $resourceName not found",404);
+//            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
+//        }
+//
+//
+//        if(is_null($queryParameters))
+//            $queryParameters = $this->getQueryParameters($resourceName);
+//
+//        try {
+//            list($records,$totalRecords) = $this->recs->getRecords($resourceName,$queryParameters);
+//            //print_r($records);
+//
+//            $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$records);
+//            $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$queryParameters["offset"],"totalRecords"=>$totalRecords]));
+//            //print_r($doc);
+//
+//
+//            HttpResp::json_out(200, $doc->json_data());
+//        }
+//        catch (Exception $exception) {
+//            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
+//        }
+//    }
 
     /**
      * @param $resName
@@ -557,36 +565,47 @@ class Dbapi extends CI_Controller
      * @param null $queryParameters
      * @deprecated
      */
-    function getSingleRecord($resName, $recId, $queryParameters=null)
-    {
-        $keyFld = $this->apiDm->getPrimaryKey($resName);
-        if(is_null($keyFld))
-            HttpResp::json_out(400,"Request not supported. Resource does not have a primary key defined");
-
-        if(is_null($queryParameters))
-            $queryParameters = $this->getQueryParameters($resName);
-
-        // get filter
-        $queryParameters["filter"] = get_filter("$keyFld=$recId",$resName);
-
-        // fetch records
-        try {
-            list($records,$totalRecords) = $this->recs->getRecords($resName,$queryParameters);
-
-
-            if(!$totalRecords) {
-                $doc = \JSONApi\Document::not_found($this->JsonApiDocOptions,"Not found",404);
-                HttpResp::json_out(404, $doc->json_data());
-            }
-
-            //$resource = \JSONApi\Resource::factory()
-            $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$records[0])->json_data();
-            HttpResp::json_out(200,$doc);
-        }
-        catch (Exception $exception) {
-            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
-        }
-    }
+//    function getSingleRecord($resName, $recId, $queryParameters=null)
+//    {
+//
+//        if(!$this->apiDm->resource_exists($resName)) {
+//            $exception = new Exception("Resource $resName not found",404);
+//            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
+//            die();
+//        }
+//
+//
+//        $keyFld = $this->apiDm->getPrimaryKey($resName);
+//        if(is_null($keyFld)) {
+//            $exception = new Exception("Request not supported. $resourceName does not have a primary key defined", 404);
+//            HttpResp::json_out($exception->getCode(), \JSONApi\Document::from_exception($this->JsonApiDocOptions, $exception)->json_data());
+//            die();
+//        }
+//
+//        if(is_null($queryParameters))
+//            $queryParameters = $this->getQueryParameters($resName);
+//
+//        // get filter
+//        $queryParameters["filter"] = get_filter("$keyFld=$recId",$resName);
+//
+//        // fetch records
+//        try {
+//            list($records,$totalRecords) = $this->recs->getRecords($resName,$queryParameters);
+//
+//
+//            if(!$totalRecords) {
+//                $doc = \JSONApi\Document::not_found($this->JsonApiDocOptions,"Not found",404);
+//                HttpResp::json_out(404, $doc->json_data());
+//            }
+//
+//            //$resource = \JSONApi\Resource::factory()
+//            $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$records[0])->json_data();
+//            HttpResp::json_out(200,$doc);
+//        }
+//        catch (Exception $exception) {
+//            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
+//        }
+//    }
 
 
     /**
@@ -598,16 +617,24 @@ class Dbapi extends CI_Controller
      */
     function getRecords($resourceName, $recId=null, $queryParameters=null)
     {
-
         $doc = \JSONApi\Document::create($this->JsonApiDocOptions);
 
         if(is_null($queryParameters))
             $queryParameters = $this->getQueryParameters($resourceName);
 
+        if(!$this->apiDm->resource_exists($resourceName)) {
+            $exception = new Exception("Resource $resourceName not found",404);
+            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
+            die();
+        }
+
         if(!is_null($recId)) {
             $keyFld = $this->apiDm->getPrimaryKey($resourceName);
-            if(is_null($keyFld))
-                HttpResp::json_out(400,"Request not supported. Resource does not have a primary key defined");
+            if(is_null($keyFld)) {
+                $exception = new Exception("Request not supported. $resourceName does not have a primary key defined", 404);
+                HttpResp::json_out($exception->getCode(), \JSONApi\Document::from_exception($this->JsonApiDocOptions, $exception)->json_data());
+                die();
+            }
 
             $queryParameters["filter"] = get_filter("$keyFld=$recId",$resourceName);
         }
@@ -812,12 +839,16 @@ class Dbapi extends CI_Controller
      * @param $relRecId
      * @throws Exception
      */
-    function updateRelated($resourceName, $recId, $relationName, $relRecId) {
+    function updateRelated($resourceName, $recId, $relationName, $relRecId=null) {
         $rel = $this->apiDm->get_relation_config($resourceName,$relationName);
         if(!$rel)
             HttpResp::not_found("RecordID $recId of $resourceName not found");
 
-        $this->updateSingleRecord($rel["table"],$relRecId);
+        if($relRecId)
+            $this->updateSingleRecord($rel["table"],$relRecId);
+        else
+            $this->updateMultipleRecords();
+
     }
 
     /**

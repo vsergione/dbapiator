@@ -155,6 +155,9 @@ $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRelated/$1/$2/$3";
 // OK
 $route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["post"] = "$controller/createRelated/$1/$2/$3";
+// OK
+$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/updateRelated/$1/$2/$3";
+
 
 // fifth family: /resourceName/id/relation/id
 // OK

@@ -888,6 +888,10 @@ class Records {
         return $this->updateById($table,$resource->id,$resource);
     }
 
+    function updateByFilter($table,$data,$filter) {
+
+    }
+
     /**
      * @param string $table
      * @param string $id
@@ -996,14 +1000,9 @@ class Records {
             }
         }
 
-        try {
-            if(isset($resource->attributes) && count(get_object_vars($resource->attributes))) {
-                $resource->attributes = $this->dm->validate_object_attributes($table, $resource->attributes, "upd");
-                return $this->updateAttributes($table,$id,$resource->attributes);
-            }
-        }
-        catch (\Exception $exception) {
-            throw new \Exception("Could not update record due to data validation failure.",400,$exception);
+        if(isset($resource->attributes) && count(get_object_vars($resource->attributes))) {
+            $resource->attributes = $this->dm->validate_object_attributes($table, $resource->attributes, "upd");
+            return $this->updateAttributes($table,$id,$resource->attributes);
         }
 
         // todo: update 1:n relationships
