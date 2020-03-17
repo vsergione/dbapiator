@@ -18,6 +18,7 @@ class Meta extends json_ready
             return new self($data);
         throw new \Exception("Invalid Meta ".json_encode($data),500);
     }
+
     private function __construct ($data)
     {
         foreach ($data as $key=>$val) {

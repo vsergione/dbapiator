@@ -229,32 +229,6 @@ class Datamodel {
     }
 
 
-
-    /**
-     * get relation descriptor object
-     * @param string $tableName source table name
-     * @param string $relationName relation name
-     * @return object|null
-     */
-    function get_relation_config($tableName,$relationName) {
-        if($this->is_valid_relation($tableName,$relationName))
-            return $this->dataModel[$tableName]["relations"][$relationName];
-        return null;
-    }
-
-    /**
-     * get relation type (1:1 or 1:n)
-     * @param string $tableName source table name
-     * @param string $relationName relation name
-     * @return string relation type or null when relation name not found
-     */
-    function get_relation_type($tableName, $relationName) {
-        if($this->is_valid_relation($tableName,$relationName))
-            return $this->dataModel[$tableName]["relations"][$relationName]["type"];
-        return null;
-    }
-
-
     /**
      * checks if resource exists
      * @param string $name

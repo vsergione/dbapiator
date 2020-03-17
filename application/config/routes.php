@@ -126,6 +126,8 @@ $route["^$stdOpsPath"]["delete"] ="$controller/deleteMultipleRecords";
 $route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/getRecords/$1";
 // #5
 $route["^$stdOpsPath\/([\w\-\_\%]+)"]["post"] = "$controller/createSingleRecord/$1";
+// #5.1
+$route["^$stdOpsPath\/([\w\-\_\%]+)"]["patch"] = "$controller/updateWhere/$1";
 
 
 // third family: /resourceName/id

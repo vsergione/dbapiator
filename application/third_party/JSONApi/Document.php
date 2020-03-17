@@ -243,6 +243,7 @@ class Document extends  json_ready
      */
     function json_data ()
     {
+
         if(property_exists($this,"errors") && empty($this->errors))
             unset($this->errors);
         if(property_exists($this,"meta") && empty($this->meta))

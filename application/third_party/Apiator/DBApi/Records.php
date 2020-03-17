@@ -669,12 +669,19 @@ class Records {
             // gets relationship config. Throws an error when relation is not valid
             $relSpec = $this->dm->get_relationship($table, $relName);
 
+            if(empty($relData)) {
+                continue;
+            }
+
             // todo: implement full validation in input_validator and remove the code bellow
             if(!is_object($relData))
                 throw new \Exception("Invalid relationship '$relName' data: invalid format ",400);
 
             if(!isset($relData->data))
                 throw new \Exception("Invalid relationship '$relName' data: invalid format",400);
+
+            if(is_null($relData->data))
+                continue;
 
             // relation type vs data type: object for outbound relations; array for inbound relations
             if ($relSpec["type"]=="inbound" && !is_array($relData->data))
@@ -839,9 +846,9 @@ class Records {
                 $newPath = $path==null ? $relName : "$path.$relName";
 
                 // iterate through data
-                foreach ($rels as $rel){
+                foreach ($rels as $relItem){
                     // check relation data type
-                    $objType = $this->get_object_type($rel);
+                    $objType = $this->get_object_type($relItem);
                     $fkFld = $relSpec["field"];
                     switch ($objType) {
                         // data is a resource indicator object = related record exist already
@@ -850,12 +857,12 @@ class Records {
                             // update related record
                             if($this->dm->resource_allow_update($relSpec["table"]))
                                 throw new \Exception("Not allowed to update relationship of type $relName 1",403);
-                            $rel->attributes = (object) [
+                            $relItem->attributes = (object) [
                                 $relSpec["field"]=>$newRecId
                             ];
                             if(!in_array($newPath,$includes))
                                 $includes[] = $newPath;
-                            $this->updateRecord($relSpec["table"],$rel);
+                            $this->updateById($relSpec["table"],$relItem->id,$relItem);
                             break;
                             // data is of newResourceObject type => new related record must be created
                         case "newResourceObject":
@@ -864,12 +871,12 @@ class Records {
                                 throw new \Exception("Not allowed to update relationship of type $relName 2",403);
                             if(!in_array($newPath,$includes))
                                 $includes[] = $newPath;
-                            $rel->attributes->$fkFld = $newRecId;
+                            $relItem->attributes->$fkFld = $newRecId;
 
-                            $this->insert($relSpec["table"],$rel,$watchDog-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
+                            $this->insert($relSpec["table"],$relItem,$watchDog-1,$onDuplicate,$fieldsToUpdate,$newPath,$includes);
                             break;
                         default:
-                            throw new \Exception("Invalid '$relName' relationship data type ($objType) : ".json_encode($rel),403);
+                            throw new \Exception("Invalid '$relName' relationship data type ($objType) : ".json_encode($relItem),403);
                     }
                 }
             }
@@ -878,18 +885,57 @@ class Records {
         return $newRecId;
     }
 
+
     /**
      * @param $table
-     * @param $resource
-     * @return string
+     * @param $attributes
+     * @param $paras
+     * @return mixed
      * @throws \Exception
      */
-    function updateRecord($table, $resource) {
-        return $this->updateById($table,$resource->id,$resource);
+    function updateAttributesByFilter($table,$attributes,$paras)
+    {
+        if(array_key_exists("custom_where",$paras))
+            $where = $paras["custom_where"];
+        else
+            $where = $this->generateWhereSQL($paras["filter"],$table);
+
+        return $this->updateAttributes($table,$attributes,$where);
     }
 
-    function updateByFilter($table,$data,$filter) {
+    /**
+     * @param $table
+     * @param $attributes
+     * @param $where
+     * @return mixed
+     */
+    function updateAttributes($table,$attributes,$where)
+    {
 
+//        print_r([$table,$attributes,$where]);
+
+        // before insert hook
+        $beforeUpdate = @include($this->configDir."/hooks/".$table."/before.update.php");
+        if(is_callable($beforeUpdate))
+            $attributes = $beforeUpdate($this,$where,$attributes);
+
+        // configure query
+        $sql = $this->dbdrv
+            ->where($where)
+            ->set($attributes)
+            ->get_compiled_update($table);
+
+
+        // perform update
+        $this->dbdrv->query($sql);
+//        echo $sql." - ".$this->dbdrv->affected_rows()."\n\n";
+
+        // after insert hook
+        $afterUpdate = @include($this->configDir."/hooks/".$table."/after.update.php");
+        if(is_callable($afterUpdate))
+            $afterUpdate($this,$where,$attributes);
+
+        return $this->dbdrv->affected_rows();
     }
 
     /**
@@ -899,7 +945,7 @@ class Records {
      * @return string mixed
      * @throws \Exception
      */
-    private function updateAttributes($table, $id, $attributes)
+    private function updateAttributesById($table, $id, $attributes)
     {
         $priKey = $this->dm->getPrimaryKey($table);
 
@@ -915,6 +961,7 @@ class Records {
                 $whereArr[] = "$name='$value'";
             }
         }
+
         // run the query
         if(count($whereArr)) {
             $sql = "SELECT * FROM $table WHERE $priKey!='$id' AND (".implode(" OR ",$whereArr).")";
@@ -924,27 +971,12 @@ class Records {
             }
         }
 
-        // before insert hook
-        $beforeUpdate = @include($this->configDir."/hooks/".$table."/before.update.php");
-        if(is_callable($beforeUpdate))
-            $attributes = $beforeUpdate($this,$id,$attributes);
-
-        // configure query
-        $sql = $this->dbdrv
-            ->where($this->dm->getPrimaryKey($table),$id)
-            ->set($attributes)
-            ->get_compiled_update($table);
-
-        // perform update
-        $this->dbdrv->query($sql);
-
-        // before insert hook
-        $afterUpdate = @include($this->configDir."/hooks/".$table."/after.update.php");
-        if(is_callable($afterUpdate))
-            $afterUpdate($this,$id,$attributes);
+        if(!$this->updateAttributes($table,$attributes,[$priKey=>$id]))
+            return  null;
 
         if(isset($attributes[$priKey]))
             return $attributes[$priKey];
+
         return $id;
 
     }
@@ -962,52 +994,63 @@ class Records {
      * update Record
      * @param $table
      * @param $id
-     * @param $resource
+     * @param $resourceData
      * @return string
      * @throws \Exception
      */
-    function updateById($table, $id, $resource) {
+    function updateById($table, $id, $resourceData) {
+
         if(!$this->dm->getPrimaryKey($table))
             throw new \Exception("Update by ID not allowed: table '$table' does not have primary key/unique field.",500);
 
         // extract 1:1 relation data and insert
-        if(isset($resource->relationships)) {
-            foreach ($resource->relationships as $relName => $relData) {
-                $relSpec = $this->dm->get_relation_config($table, $relName);
+        if(isset($resourceData->relationships)) {
+            foreach ($resourceData->relationships as $relName => $relData) {
+                $relData = $relData->data;
+                $relSpec = $this->dm->get_relationship($table, $relName);
 
-                if ($relSpec["type"] !== "outbound")
-                    continue;
+                if ($relSpec["type"] === "outbound") {
+                    if (!isset($resourceData->attributes))
+                        $resourceData->attributes = new \stdClass();
 
-                if (!isset($resource->attributes))
-                    $resource->attributes = new \stdClass();
+                    if (!isset($relData->type))
+                        throw new \Exception("Invalid empty data type for relation '$relName' of record ID $id of type $table");
 
-                if(isset($relData->id) && $relData->id!==null) {
-                    $resource->attributes->$relName = $relData->id;
-                    continue;
+                    if (isset($relData->id) && $relData->id !== null) {
+                        $this->updateById($relData->type,$relData->id,$relData);
+                        $resourceData->attributes->$relName = $relData->id;
+                        continue;
+                    }
+
+                    if ($relData->type !== $relSpec["table"])
+                        throw new \Exception("Invalid data type for relation '$relName' of record ID $id of type $table");
+
+                    $includes = [];
+                    //                echo "inserting";
+                    //                print_r($relData);
+                    $resourceData->attributes[$relName] = $this->insert($relData->type, $relData, get_instance()->get_max_insert_recursions(),
+                        "", [], null, $includes);
                 }
 
-                if(!isset($relData->type))
-                    throw new \Exception("Invalid empty data type for relation '$relName' of record ID $id of type $table");
-
-                if($relData->type!==$relSpec["table"])
-                    throw new \Exception("Invalid data type for relation '$relName' of record ID $id of type $table");
-
-                $includes = [];
-//                echo "inserting";
-//                print_r($relData);
-                $resource->attributes[$relName] = $this->insert($relData->type,$relData,get_instance()->get_max_insert_recursions(),
-                    "",[],null,$includes);
+                if ($relSpec["type"] === "inbound") {
+                    if(!is_array($relData)) {
+                        throw new \Exception("Invalid relation data '$relName' of record ID $id of type $table: not an array");
+                        
+                    }
+                    foreach ($relData as $item) {
+                        $this->updateById($item->type,$item->id,$item);
+                    }
+                }
             }
         }
 
-        if(isset($resource->attributes) && count(get_object_vars($resource->attributes))) {
-            $resource->attributes = $this->dm->validate_object_attributes($table, $resource->attributes, "upd");
-            return $this->updateAttributes($table,$id,$resource->attributes);
-        }
 
+        if(isset($resourceData->attributes) && count(get_object_vars($resourceData->attributes))) {
+            $resourceData->attributes = $this->dm->validate_object_attributes($table, $resourceData->attributes, "upd");
+            return $this->updateAttributesById($table,$id,$resourceData->attributes);
+        }
         // todo: update 1:n relationships
 
-        // get key flds of table
 
 
         return  $id;

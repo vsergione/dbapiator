@@ -315,6 +315,30 @@ function cleanUpArray($arr) {
     return $arr;
 }
 
+
+function validate_body_data($inputData) {
+
+    if(!is_object($inputData))
+        throw new Exception("Invalid input data: should be an object",400);
+
+    if(!property_exists($inputData,"data"))
+        throw new Exception("Invalid input data: root object should have a 'data' member",400);
+
+    $type = is_object($inputData->data)?"o":(is_array($inputData->data)?"a":"s");
+    switch($type) {
+        case "o";
+            is_valid_resource_object($inputData->data);
+            break;
+        case "a":
+            foreach ($inputData->data as $item)
+                is_valid_resource_object($item);
+            break;
+        default:
+            throw new Exception("Invalid input data: root object member 'data' should an array or an object",400);
+    }
+
+}
+
 /**
  * validates $data as a JSON API document
  * @param $data
@@ -337,7 +361,6 @@ function validatePostData($data, $requiredAttributes=[]) {
         foreach($entries as $entry) {
             isValidPostDataEntry($entry,$requiredAttributes);
         }
-    
 
 }
 /**
@@ -422,4 +445,55 @@ function isValidPostDataEntry($entry, $requiredAttributes=[]) {
 function unique_id($len)
 {
     return bin2hex(openssl_random_pseudo_bytes($len));
+}
+
+
+
+/**
+ * @param $obj
+ * @throws \Exception
+ */
+function is_valid_resource_object($obj) {
+    if(!is_object($obj)) {
+        throw new \Exception("Invalid resource: must be an object",400);
+    }
+
+    if(property_exists($obj,"id") && empty($obj->id)) {
+        throw new \Exception("Invalid object ID: cannot be null/empty",400);
+    }
+
+    if(property_exists($obj,"attributes") && !is_object($obj->attributes)) {
+        throw new \Exception("Invalid attributes member: must be an object",400);
+    }
+
+    if(property_exists($obj,"relationships") && !is_object($obj->relationships)) {
+        throw new \Exception("Invalid relationships member: must be an object", 400);
+    }
+
+    if(!property_exists($obj,"relationships"))
+        return;
+
+    foreach ($obj->relationships as $key=>$relData) {
+        if(!is_object($obj)) {
+            throw new \Exception("Invalid relationship resource: must be an object",400);
+        }
+
+        if(!property_exists($obj,"data")) {
+            continue;
+        }
+
+        if(is_object($obj->data)) {
+            is_valid_resource_object($obj->data);
+            continue;
+        }
+
+        if(is_array($obj->data)) {
+            foreach ($obj->data as $relData) {
+                is_valid_resource_object($relData);
+            }
+            continue;
+        }
+
+        throw new \Exception("Invalid relationship data member: not an object or array",400);
+    }
 }
