@@ -6,29 +6,13 @@
  * Time: 4:19 PM
  */
 
-
-require APPPATH."/libraries/Response.php";
-class sss
-{
-    public $var;
-    function __construct ()
-    {
-        $this->var = 1;
-    }
-
-    function &get_ref()
-    {
-        return $this;
-    }
-}
 /**
  * Class Mytest
  * @property CI_Loader load
  * @property CI_Config config
  * @property CI_Session session
  */
-class Mytest extends CI_Controller
-
+class Test extends CI_Controller
 {
     function __construct ()
     {
@@ -51,9 +35,9 @@ class Mytest extends CI_Controller
         echo $this->session->counter;
     }
 
-    function index()
+    function show($a)
     {
-        $this->load->view("test",[]);
+        echo $a;
     }
 
 }

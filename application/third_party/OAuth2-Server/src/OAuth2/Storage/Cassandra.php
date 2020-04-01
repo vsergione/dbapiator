@@ -28,7 +28,7 @@ use InvalidArgumentException;
  *     $storage->setClientDetails($client_id, $client_secret, $redirect_uri);
  * </code>
  *
- * @see test/lib/OAuth2/Storage/Bootstrap::getCassandraStorage
+ * @see Test/lib/OAuth2/Storage/Bootstrap::getCassandraStorage
  */
 class Cassandra implements AuthorizationCodeInterface,
     AccessTokenInterface,

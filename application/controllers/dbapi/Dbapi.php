@@ -102,15 +102,15 @@ class Dbapi extends CI_Controller
     {
         try {
             $this->createMultipleRecords();
-            $this->updateMultipleRecords();
-            $this->deleteMultipleRecords();
+//            $this->updateMultipleRecords();
+//            $this->deleteMultipleRecords();
             $this->getMultipleRecords();
             $this->getSingleRecord();
-            $this->createSingleRecord();
-            $this->updateSingleRecord();
-            $this->deleteSingleRecord();
+//            $this->createSingleRecord();
+//            $this->updateSingleRecord();
+//            $this->deleteSingleRecord();
             $this->getRelationship();
-            $this->getRelated();
+//            $this->getRelated();
             $this->create_relationship();
             $this->update_relationship();
             $this->delete_relationship();
@@ -137,7 +137,7 @@ class Dbapi extends CI_Controller
         // TODO: implement CORS control
         header("Access-Control-Allow-Origin: *");
 
-        $this->_init();
+        //$this->_init();
     }
 
 
@@ -148,23 +148,24 @@ class Dbapi extends CI_Controller
      * - apiDm: DataModel
      * - apiDb: database connection
      */
-    private function _init()
+    private function _init($configName)
     {
+        if($this->apiConfigDir)
+            return;
 
-        $apiConfigDir = $this->config->item("api_config_dir");
+        $this->apiConfigDir = $this->config->item("api_config_dir")($configName);
 
         $this->baseUrl = "https://".$_SERVER["SERVER_NAME"]."/v2";
         $this->JsonApiDocOptions["baseUrl"] = $this->baseUrl;
 
-        if(!is_dir($apiConfigDir)) {
+        if(!is_dir($this->apiConfigDir)) {
             // API Not found
             // TODO: log to applog (API not found)
-            HttpResp::json_out(500,"Invalid API config dir $apiConfigDir");
+            HttpResp::json_out(500,"Invalid API config dir $this->apiConfigDir");
         }
-        $this->apiConfigDir = $apiConfigDir;
 
         // load structure
-        $structure = require($apiConfigDir."/structure.php");
+        $structure = require($this->apiConfigDir."/structure.php");
         if(!isset($structure)) {
             // Invalid API config
             // TODO: log error: wrong api config
@@ -172,7 +173,7 @@ class Dbapi extends CI_Controller
         }
 
         // load connection
-        $dbConf = require($apiConfigDir."/connection.php");
+        $dbConf = require($this->apiConfigDir."/connection.php");
         if(!isset($dbConf)) {
             HttpResp::server_error("Invalid database config");
         }
@@ -244,10 +245,12 @@ class Dbapi extends CI_Controller
      * generates OpenAPI swagger file in JSON format
      * final
      */
-    function swagger()
+    function swagger($configName)
     {
+        $this->_init($configName);
         $this->load->helper("swagger");
-        $openApiSpec = generate_swagger($_SERVER["SERVER_NAME"],$this->apiDm->get_dataModel(),"/v2","To update","To update","Test User","test@user.com");
+        $openApiSpec = generate_swagger($_SERVER["SERVER_NAME"],$this->apiDm->get_dataModel(),"/dbapi/v2/$configName",
+            "$configName Spec","$configName spec","$configName","test@user.com");
         HttpResp::json_out(200,$openApiSpec);
     }
 
@@ -283,13 +286,16 @@ class Dbapi extends CI_Controller
 
     /**
      * Creates multiple records with a single call
+     * @param $configName
      * @param $resourceName
      * @param null $paras
      * @throws Exception
      * @todo to be implemented
      */
-    function updateWhere($resourceName,$paras=null)
+    function updateWhere($configName,$resourceName,$paras=null)
     {
+        $this->_init($configName);
+
         try {
             if(!$this->apiDm->resource_exists($resourceName))
                 throw new Exception("Resource $resourceName not found",404);
@@ -333,18 +339,21 @@ class Dbapi extends CI_Controller
                 $doc->json_data()
             );
         }
-        $this->getRecords($resourceName,null,$paras);
+        $this->getRecords($configName,$resourceName,null,$paras);
     }
 
     /**
      * Update multiple records of different types with a single call
+     * @param $configName
      * @param $resourceName
      * @param null $inputData
      * @throws Exception
      * @todo to be implemented
      */
-    function updateMultipleRecords($resourceName,$inputData=null)
+    function updateMultipleRecords($configName,$resourceName,$inputData=null)
     {
+        $this->_init($configName);
+
         // todo: finish it
 
         // & validate it
@@ -372,7 +381,7 @@ class Dbapi extends CI_Controller
                 continue;
 
             try {
-                $ids[] = $this->updateSingleRecord($item->type, $item->id, (object) ["data"=>$item]);
+                $ids[] = $this->updateSingleRecord($configName,$item->type, $item->id, (object) ["data"=>$item]);
             }
             catch (Exception $e) {
                 $exceptions[] = new Exception("Failed to update record number $idx: ".$e->getMessage(),$e->getCode());
@@ -398,11 +407,14 @@ class Dbapi extends CI_Controller
 
 
     /**
+     * @param $configName
      * @param $tableName
      * @todo to be implemented
      */
-    function deleteMultipleRecords($tableName)
+    function deleteMultipleRecords($configName,$tableName)
     {
+        $this->_init($configName);
+
         HttpResp::method_not_allowed();
 
         // check if table exists
@@ -416,6 +428,7 @@ class Dbapi extends CI_Controller
 
     /**
      * update one record
+     * @param $configName
      * @param string $resourceName
      * @param string $recId
      * @param null $updateData
@@ -423,8 +436,10 @@ class Dbapi extends CI_Controller
      * @throws Exception
      * @todo validate it
      */
-    function updateSingleRecord($resourceName, $recId, $updateData=null)
+    function updateSingleRecord($configName,$resourceName, $recId, $updateData=null)
     {
+        $this->_init($configName);
+
         $internal = !is_null($updateData);
 
         // validation section
@@ -471,7 +486,7 @@ class Dbapi extends CI_Controller
             $qp = $this->getQueryParameters($resourceName);
             $qp["offset"] = 0;
 
-            $this->getRecords($resourceName,$recId,$qp);
+            $this->getRecords($configName,$resourceName,$recId,$qp);
         }
         catch (Exception $exception) {
             $this->apiDb->trans_rollback();
@@ -560,16 +575,18 @@ class Dbapi extends CI_Controller
     }
 
 
-
     /**
      * get records from table or from view identified by $resourceName
+     * @param $configName
      * @param $resourceName
      * @param string|null $recId
      * @param array|null $queryParameters
      * @throws Exception
      */
-    function getRecords($resourceName, $recId=null, $queryParameters=null)
+    function getRecords($configName,$resourceName, $recId=null, $queryParameters=null)
     {
+        $this->_init($configName);
+
         if(is_null($queryParameters))
             $queryParameters = $this->getQueryParameters($resourceName);
 
@@ -625,10 +642,13 @@ class Dbapi extends CI_Controller
 
 
     /**
+     * @param $configName
      * @param $procedureName
      */
-    function callStoredProcedure($procedureName)
+    function callStoredProcedure($configName,$procedureName)
     {
+        $this->_init($configName);
+
         if($_SERVER["REQUEST_METHOD"]!=="POST")
             HttpResp::method_not_allowed();
 
@@ -693,74 +713,30 @@ class Dbapi extends CI_Controller
 
 
     /**
+     * @param $configName
      * @param $resourceName
      * @param $recId
      * @param $relationName
      */
-    function updateRelationships($resourceName, $recId, $relationName)
+    function updateRelationships($configName,$resourceName, $recId, $relationName)
     {
+        $this->_init($configName);
+
         print_r(func_get_args());
     }
 
 
     /**
+     * @param $configName
      * @param $resourceName
      * @param $recId
      * @param $relationName
-     * @throws Exception
+     * @param $relRecId
      */
-//    function getRelationship($resourceName, $recId, $relationName)
-//    {
-//        // detect relation type
-//        try {
-//            if(!$this->apiDm->resource_exists($resourceName))
-//                throw new Exception("Resource $resourceName not found",404);
-//
-//            $relSpec = $this->apiDm->get_relationship($resourceName, $relationName);
-//            $relationType = $relSpec["type"];
-//            $relRes = $relSpec["table"];
-//        }
-//        catch (Exception $exception) {
-//            HttpResp::json_out($exception->getCode(),
-//                \JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
-//        }
-//
-//        // prepare filter for matching the parent records
-//        $filterStr = $this->apiDm->getPrimaryKey($resourceName)."=$recId";
-//        $filter = get_filter($filterStr,$resourceName);
-//        $parent = null;
-//        // fetch parent record
-//        try {
-//            list($records, $count) = $this->recs->getRecords($resourceName, [
-//                "filter"=> $filter
-//            ]);
-//
-//            if(!$count) {
-//                HttpResp::not_found("RecordID $recId of $resourceName not found");
-//            }
-//            $parent = $records[0];
-//            if($relationType=="outbound")
-//                $fkId = $parent->relationships->$relationName->id;
-//        }
-//        catch (Exception $exception) {
-//            HttpResp::json_out($exception->getCode(),\JSONApi\Document::from_exception($this->JsonApiDocOptions,$exception)->json_data());
-//        }
-//
-//        if($relationType=="inbound") {
-//            $_GET["filter"] = @$_GET["filter"] . "," . $relSpec["field"] . "=" . $recId;
-//            //$this->get_multiple_records()
-////            $this->getMultipleRecords($relSpec["table"],["offset"=>0,"fields"=>[$relSpec["table"]=>"id"]]);
-//            $this->getRecords($relSpec["table"],null,["offset"=>0,"fields"=>[$relSpec["table"]=>"id"]]);
-//        }
-//        if($relationType=="outbound") {
-//            $_GET["filter"] = $relSpec["field"]."=".$fkId;
-//            $this->getRecords($relSpec["table"],$fkId);
-//        }
-//
-//    }
-
-    function deleteRelated($resourceName, $recId, $relationName, $relRecId)
+    function deleteRelated($configName,$resourceName, $recId, $relationName, $relRecId)
     {
+        $this->_init($configName);
+
         try {
             if(!$this->apiDm->resource_exists($resourceName))
                 throw new Exception("Resource $resourceName not found",404);
@@ -789,14 +765,17 @@ class Dbapi extends CI_Controller
 
 
     /**
+     * @param $configName
      * @param $resourceName
      * @param $recId
      * @param $relationName
      * @param $relRecId
      * @throws Exception
      */
-    function updateRelated($resourceName, $recId, $relationName, $relRecId=null)
+    function updateRelated($configName,$resourceName, $recId, $relationName, $relRecId=null)
     {
+        $this->_init($configName);
+
         try {
             if(!$this->apiDm->resource_exists($resourceName))
                 throw new Exception("Resource $resourceName not found",404);
@@ -810,7 +789,7 @@ class Dbapi extends CI_Controller
         }
 
         if($relRecId) {
-            $this->updateSingleRecord($rel["table"], $relRecId);
+            $this->updateSingleRecord($configName,$rel["table"], $relRecId);
             return;
         }
 
@@ -819,17 +798,20 @@ class Dbapi extends CI_Controller
         $_GET["filter"] .= sprintf(",%s=%s",$rel['field'],$recId);
 
         $paras = $this->getQueryParameters($rel["table"]);
-        $this->updateWhere($rel["table"],$paras);
+        $this->updateWhere($configName,$rel["table"],$paras);
     }
 
     /**
+     * @param $configName
      * @param $resourceName
      * @param $recId
      * @param $relationName
      * @throws Exception
      */
-    function createRelated($resourceName, $recId, $relationName)
+    function createRelated($configName,$resourceName, $recId, $relationName)
     {
+        $this->_init($configName);
+
         $rel = $this->apiDm->get_relationship($resourceName,$relationName);
         if(!$rel)
             HttpResp::not_found("RecordID $recId of $resourceName not found");
@@ -846,17 +828,22 @@ class Dbapi extends CI_Controller
 
         $fld = $rel["field"];
         $inputData->data->attributes->$fld = $recId;
-        $this->createSingleRecord($rel["table"],$inputData);
+        $this->createSingleRecord($configName,$rel["table"],$inputData);
     }
+
     /**
      * fetch related resource(s)
+     * @param $configName
      * @param string $resourceName parent record resource type
      * @param string $recId parent record ID
      * @param string $relationName related resource name
+     * @param null $relRecId
      * @throws Exception
      */
-    function getRelated($resourceName, $recId, $relationName, $relRecId=null)
+    function getRelated($configName,$resourceName, $recId, $relationName, $relRecId=null)
     {
+        $this->_init($configName);
+
         // detect relation type
         try {
             $relSpec = $this->apiDm->get_relationship($resourceName, $relationName);
@@ -895,25 +882,29 @@ class Dbapi extends CI_Controller
 
         if($relationType=="inbound") {
             $_GET["filter"] = @$_GET["filter"] . "," . $relSpec["field"] . "=" . $recId;
-            $this->getRecords($relSpec["table"],$relRecId);
+            $this->getRecords($configName,$relSpec["table"],$relRecId);
         }
 
         if($relationType=="outbound") {
             $_GET["filter"] = $relSpec["field"]."=".$fkId;
-            $this->getRecords($relSpec["table"],$fkId);
+            $this->getRecords($configName,$relSpec["table"],$fkId);
         }
     }
 
 
     /**
      * Insert records recursively
+     * @param $configName
      * @param $tableName
+     * @param null $input
      * @return null
      * TODO: add some limitation for maximum records to insert at a time
      * @throws Exception
      */
-    public function createSingleRecord($tableName, $input=null)
+    public function createSingleRecord($configName,$tableName, $input=null)
     {
+        $this->_init($configName);
+
         // get input data
         try {
             if(is_null($input))
@@ -1043,11 +1034,12 @@ class Dbapi extends CI_Controller
             ->header("Access-Control-Allow-Headers: *")
             ->output();
     }
-
-
-
 }
 
+/**
+ * @param $str
+ * @return string|string[]
+ */
 function custom_where($str) {
     $expr = [];
     $start = 0;

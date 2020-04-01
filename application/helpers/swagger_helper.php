@@ -336,6 +336,11 @@ function add_components($resName, $resSpec)
         $attrs = [];
         $reqAttrs = [];
         foreach ($resSpec["fields"] as $fldName=>$fldSpec) {
+            if(!isset($fldSpec["type"])) {
+                echo $resName;
+                print_r($resSpec);
+                die();
+            }
             $attrs[$fldName] = typeMap($fldSpec["type"]);
             if($fldSpec["required"])
                 $reqAttrs[] = $fldName;
@@ -1145,13 +1150,13 @@ function open_api_spec($hostName, $basePath,$desc,$title,$name,$email)
             "description" => $desc,
             "version" => "1.0.0",
             "title" => $title,
-            "contact" => [
-                "name" => $name,
-                "email" => $email
-            ],
-            "license" => [
-                "name" => "GPL"
-            ]
+//            "contact" => [
+//                "name" => $name,
+//                "email" => $email
+//            ],
+//            "license" => [
+//                "name" => "GPL"
+//            ]
         ],
         "servers" => [
             ["url"=>sprintf("https://%s%s",$hostName,$basePath)]
