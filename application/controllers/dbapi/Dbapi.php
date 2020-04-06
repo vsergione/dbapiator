@@ -844,7 +844,6 @@ class Dbapi extends CI_Controller
         }
 
         $fld = $rel["field"];
-        $inputData->data->attributes->$fld = $recId;
         $this->createSingleRecord($configName,$rel["table"],$inputData);
     }
 
