@@ -49,17 +49,16 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 | Examples:	my-controller/index	-> my_controller/index
 |		my-controller/my-method	-> my_controller/my_method
 */
-$route['default_controller'] = 'dbapi';
+$route['default_controller'] = 'dbapi/dbapi';
 //$route['404_override'] = 'errors/not_found';
 $route['translate_uri_dashes'] = false;
 
 
 // /api/apiName/entryPoint
 $controller = "dbapi/dbapi";
-$basePath = "v2";
 
 // ApiId part of the domain name
-$stdOpsPath = $basePath;
+$basePath = "v2";
 
 
 // ApiId part of the server path
@@ -107,67 +106,67 @@ $route["^test\/(.*)"] ="$controller/test/$1";
 
 
 // stored procedures
-$route["^$stdOpsPath\/__call__/([\w\-\_\%]+)"] = "$controller/callStoredProcedure/$1";
+$route["^$basePath\/__call__/([\w\-\_\%]+)"] = "$controller/callStoredProcedure/$1";
 
 
 
 // first family: - bulk operations /
 // #1
-$route["^$stdOpsPath"]["post"] ="$controller/createMultipleRecords/$1";
+$route["^$basePath"]["post"] ="$controller/createMultipleRecords/$1";
 // #2
-$route["^$stdOpsPath"]["patch"] ="$controller/updateMultipleRecords/$1";
+$route["^$basePath"]["patch"] ="$controller/updateMultipleRecords/$1";
 // #3
-$route["^$stdOpsPath"]["delete"] ="$controller/deleteMultipleRecords/$1";
+$route["^$basePath"]["delete"] ="$controller/deleteMultipleRecords/$1";
 
-
+$route["^$basePath\/([\w\-\_\%]+)"] = "$controller/base/$1";
 // second family: /resourceŃame
 // #4 OK
 //$route["^$stdOpsPath\/([\w\-\_\%]+)"]["get"] = "$controller/getMultipleRecords/$1";
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRecords/$1/$2";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRecords/$1/$2";
 // #5
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["post"] = "$controller/createSingleRecord/$1/$2";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["post"] = "$controller/createSingleRecord/$1/$2";
 // #5.1
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/updateWhere/$1/$2";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/updateWhere/$1/$2";
 
 
 // third family: /resourceName/id
 // #6 OK
 //$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getSingleRecord/$1/$2";
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRecords/$1/$2/$3";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRecords/$1/$2/$3";
 // #7
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/updateSingleRecord/$1/$2/$3";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/updateSingleRecord/$1/$2/$3";
 // #8
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["delete"] = "$controller/deleteSingleRecord/$1/$2/$3";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["delete"] = "$controller/deleteSingleRecord/$1/$2/$3";
 
 
 // third family: /resourceName/id/_relationships/relation
 // #9
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["get"] = "$controller/get_relationship/$1/$2/$3/$4";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["get"] = "$controller/get_relationship/$1/$2/$3/$4";
 // #10
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["post"] = "$controller/create_relationship/$1/$2/$3/$4";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["post"] = "$controller/create_relationship/$1/$2/$3/$4";
 // #11
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["patch"] = "$controller/update_relationship/$1/$2/$3/$4";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["patch"] = "$controller/update_relationship/$1/$2/$3/$4";
 // #12
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["delete"] = "$controller/delete_relationship/$1/$2/$3/$4";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/_relationships\/([\w\-\_\%]+)"]["delete"] = "$controller/delete_relationship/$1/$2/$3/$4";
 
 
 // fourth family: /resourceName/id/relation
 // #13
 // OK
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRelated/$1/$2/$3/$4";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["get"] = "$controller/getRelated/$1/$2/$3/$4";
 // OK
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["post"] = "$controller/createRelated/$1/$2/$3/$4";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["post"] = "$controller/createRelated/$1/$2/$3/$4";
 // OK
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/updateRelated/$1/$2/$3/$4";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)"]["patch"] = "$controller/updateRelated/$1/$2/$3/$4";
 
 
 // fifth family: /resourceName/id/relation/id
 // OK
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["get"] = "$controller/getRelated/$1/$2/$3/$4/$5";
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["patch"] = "$controller/updateRelated/$1/$2/$3/$4/$5";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["get"] = "$controller/getRelated/$1/$2/$3/$4/$5";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["patch"] = "$controller/updateRelated/$1/$2/$3/$4/$5";
 // OK
-$route["^$stdOpsPath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["delete"] = "$controller/deleteRelated/$1/$2/$3/$4/$5";
+$route["^$basePath\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)\/([\w\-\_\%]+)/([\w\-\_\%]+)"]["delete"] = "$controller/deleteRelated/$1/$2/$3/$4/$5";
 
 
-$route["^$stdOpsPath\/.*"]["options"] = "$controller/options";
+$route["^$basePath\/.*"]["options"] = "$controller/options";
 

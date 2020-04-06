@@ -25,6 +25,10 @@ class Test extends CI_Controller
         session_write_close();
     }
 
+    function index() {
+
+    }
+
     function respond_something()
     {
         return Response::make(true);

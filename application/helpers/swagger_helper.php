@@ -337,9 +337,10 @@ function add_components($resName, $resSpec)
         $reqAttrs = [];
         foreach ($resSpec["fields"] as $fldName=>$fldSpec) {
             if(!isset($fldSpec["type"])) {
-                echo $resName;
-                print_r($resSpec);
-                die();
+//                echo $resName;
+//                print_r($resSpec);
+//                die();
+                continue;
             }
             $attrs[$fldName] = typeMap($fldSpec["type"]);
             if($fldSpec["required"])
@@ -694,6 +695,8 @@ function create_single_record($resourceName,$resourceSpecifications)
     ];
     $attrs = &$data["responses"]["200"]["content"]["application/json"]["schema"]["properties"]["data"]["properties"]["attributes"]["properties"];
     foreach ($resourceSpecifications["fields"] as $field=>$fieldSpec) {
+        if(!isset($fieldSpec["type"]))
+            continue;
         $attrs["$field"] = typeMap($fieldSpec["type"]);
     }
 
@@ -1226,6 +1229,8 @@ function generate_swagger($hostName,$dataModel,$basePath,$desc,$title,$name,$ema
         /************************************************
          * path: /resourceName/ID
          ***********************************************/
+        if(!isset($resourceSpecifications["keyFld"]))
+            continue;
         $singleResourcePath = sprintf("%s/{%s}",$resourcesPath,$resourceSpecifications["keyFld"]);
         $openApiSpec["paths"][$singleResourcePath] = [];
 
@@ -1243,27 +1248,6 @@ function generate_swagger($hostName,$dataModel,$basePath,$desc,$title,$name,$ema
         if($data=delete_single_record($resourceName,$resourceSpecifications,$dataModel)) {
             $openApiSpec["paths"][$singleResourcePath]["delete"] = $data;
         }
-
-
-
-//
-//        if(count($openApiSpec["paths"][$resourcePath])) {
-//            $openApiSpec["paths"][$resourcePath]["summary"] = "Retrieve and manipulate record identified by '$resourceName' record";
-//            $openApiSpec["paths"][$resourcePath]["parameters"][] = [
-//                "name" => $resourceSpecifications["keyFld"],
-//                "in" => "path",
-//                "required" => true,
-//                "type" => "string"
-//            ];
-//        }
-//        else
-//            unset($openApiSpec["paths"][$resourcePath]);
-//
-//
-//
-        /************************************************
-         * /s/resourceName/ID/__relationships/relName
-         ***********************************************/
 
 
 
@@ -1313,6 +1297,7 @@ function generate_swagger($hostName,$dataModel,$basePath,$desc,$title,$name,$ema
                 $openApiSpec["paths"][$relatedResourcePath]["get"] = $data;
             }
         }
+
     }
 
 

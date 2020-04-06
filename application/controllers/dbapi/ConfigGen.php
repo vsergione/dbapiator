@@ -31,9 +31,11 @@ class ConfigGen extends CI_Controller
         "save_queries"=> true
     ];
 
-    function cli($hostname,$username,$password,$database,$path=null){
+    function cli($driver,$hostname,$username,$password,$database,$path=null){
+        if($path)
+            $path = urldecode($path);
         $conn = self::$conn;
-        $conn["dbdriver"] = 'mysqli';
+        $conn["dbdriver"] = $driver;
         $conn["hostname"] = $hostname;
         $conn["username"] = $username;
         $conn["password"] = $password;
@@ -43,8 +45,8 @@ class ConfigGen extends CI_Controller
         $structure = \Softaccel\Apiator\DBApi\DBWalk::parse_mysql($db,$conn['database']);
         $structure = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($structure['structure'],JSON_PRETTY_PRINT)).";";
         $connection = "<?php\nreturn ".preg_replace(["/\{/","/\}/","/\:/"],["[","]","=>"],json_encode($conn,JSON_PRETTY_PRINT)).";";
-        file_put_contents($_SERVER['PWD']."/structure.php",$structure);
-        file_put_contents($_SERVER['PWD']."/connection.php",$connection);
+        file_put_contents(($path?$path:$_SERVER['PWD'])."/structure.php",$structure);
+        file_put_contents(($path?$path:$_SERVER['PWD'])."/connection.php",$connection);
     }
 
 

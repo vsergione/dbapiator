@@ -161,7 +161,7 @@ class Dbapi extends CI_Controller
         if(!is_dir($this->apiConfigDir)) {
             // API Not found
             // TODO: log to applog (API not found)
-            HttpResp::json_out(500,"Invalid API config dir $this->apiConfigDir");
+            HttpResp::exception_out(new Exception("Invalid API config dir $this->apiConfigDir",500));
         }
 
         // load structure
@@ -169,7 +169,7 @@ class Dbapi extends CI_Controller
         if(!isset($structure)) {
             // Invalid API config
             // TODO: log error: wrong api config
-            HttpResp::server_error("Invalid API configuration");
+            HttpResp::exception_out(new Exception("Invalid API configuration",404));
         }
 
         // load connection
@@ -242,15 +242,32 @@ class Dbapi extends CI_Controller
     }
 
     /**
+     * @param $configName
+     */
+    function base($configName) {
+        $this->_init($configName);
+        HttpResp::json_out(200,["message"=>"'$configName' REST API ready to serve "]);
+    }
+
+    /**
      * generates OpenAPI swagger file in JSON format
      * final
      */
     function swagger($configName)
     {
+
         $this->_init($configName);
+        $this->load->config("apiator");
         $this->load->helper("swagger");
-        $openApiSpec = generate_swagger($_SERVER["SERVER_NAME"],$this->apiDm->get_dataModel(),"/dbapi/v2/$configName",
-            "$configName Spec","$configName spec","$configName","test@user.com");
+
+        $openApiSpec = generate_swagger(
+            $_SERVER["SERVER_NAME"],
+            $this->apiDm->get_dataModel(),
+            $this->baseUrl."/$configName",
+            "$configName Spec",
+            "$configName spec",
+            "$configName",
+            "test@user.com");
         HttpResp::json_out(200,$openApiSpec);
     }
 
