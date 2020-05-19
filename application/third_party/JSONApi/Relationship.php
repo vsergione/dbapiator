@@ -43,7 +43,7 @@ class Relationship extends json_ready
     static function factory($data,$links=null)
     {
         if(!is_null($links) && !($links instanceof  Links))
-            throw new \Exception("Invalid Links object");
+            throw new \Exception("Invalid Links object",500);
 
         switch($data->type) {
             case "array":
@@ -160,7 +160,7 @@ class Relationship extends json_ready
     {
         if(isset($this->rels[$name]))
             return $this->rels[$name];
-        throw new \Exception("Invalid relation $name");
+        throw new \Exception("Invalid relation $name",500);
     }
 
     function json_data ()

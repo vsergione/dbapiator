@@ -71,7 +71,7 @@ class Document extends  json_ready
         if(isset($options["baseUrl"]))
             self::$doc->baseUrl = $options["baseUrl"];
         else
-            throw new \Exception("Missing Base URL when initializing JSONAPI Document");
+            throw new \Exception("Missing Base URL when initializing JSONAPI Document",500);
 
         self::$doc->setData($data);
         if($meta)

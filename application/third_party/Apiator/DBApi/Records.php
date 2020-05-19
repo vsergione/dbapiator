@@ -1002,7 +1002,6 @@ class Records {
 
         if(!$this->dm->getPrimaryKey($table))
             throw new \Exception("Update by ID not allowed: table '$table' does not have primary key/unique field.",500);
-
         // extract 1:1 relation data and insert
         if(isset($resourceData->relationships)) {
             foreach ($resourceData->relationships as $relName => $relData) {
@@ -1010,31 +1009,37 @@ class Records {
                 $relSpec = $this->dm->get_relationship($table, $relName);
 
                 if ($relSpec["type"] === "outbound") {
+//                    log_message("debug",print_r($resourceData,true));
                     if (!isset($resourceData->attributes))
                         $resourceData->attributes = new \stdClass();
 
+                    if($relData === null) {
+                        $resourceData->attributes->$relName = null;
+                        continue;
+                    }
                     if (!isset($relData->type))
-                        throw new \Exception("Invalid empty data type for relation '$relName' of record ID $id of type $table");
+                        throw new \Exception("Invalid empty data type for relation '$relName' of record ID $id of type $table", 400);
 
                     if (isset($relData->id) && $relData->id !== null) {
-                        $this->updateById($relData->type,$relData->id,$relData);
+                        $this->updateById($relData->type, $relData->id, $relData);
                         $resourceData->attributes->$relName = $relData->id;
                         continue;
                     }
 
                     if ($relData->type !== $relSpec["table"])
-                        throw new \Exception("Invalid data type for relation '$relName' of record ID $id of type $table");
+                        throw new \Exception("Invalid data type for relation '$relName' of record ID $id of type $table", 400);
 
                     $includes = [];
                     //                echo "inserting";
                     //                print_r($relData);
-                    $resourceData->attributes[$relName] = $this->insert($relData->type, $relData, get_instance()->get_max_insert_recursions(),
+                    $resourceData->attributes->$relName = $this->insert($relData->type, $relData, get_instance()->get_max_insert_recursions(),
                         "", [], null, $includes);
+                    continue;
                 }
 
                 if ($relSpec["type"] === "inbound") {
                     if(!is_array($relData)) {
-                        throw new \Exception("Invalid relation data '$relName' of record ID $id of type $table: not an array");
+                        throw new \Exception("Invalid relation data '$relName' of record ID $id of type $table: not an array",400);
                         
                     }
                     foreach ($relData as $item) {

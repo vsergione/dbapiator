@@ -46,15 +46,13 @@ class Resource extends json_ready
     static function factory($data)
     {
         if(!is_object($data))
-            throw new \Exception("Invalid data parameter when creating a new Resource: not an object");
+            throw new \Exception("Invalid data parameter when creating a new Resource: not an object",500);
         if(!isset($data->type))
-            throw new \Exception("Invalid data parameter when creating a new Resource: type property missing");
-//        if(!isset($data->id))
-//            throw new \Exception("Invalid data parameter when creating a new Resource: id property missing");
+            throw new \Exception("Invalid data parameter when creating a new Resource: type property missing",500);
         if(!isset($data->attributes))
-            throw new \Exception("Invalid data parameter when creating a new Resource: attributes property missing");
+            throw new \Exception("Invalid data parameter when creating a new Resource: attributes property missing",500);
         if(!is_object($data->attributes))
-            throw new \Exception("Invalid data parameter when creating a new Resource: attributes property not an object");
+            throw new \Exception("Invalid data parameter when creating a new Resource: attributes property not an object",500);
 
         $res = new self($data->type,$data->id);
         $res->setAttributes(Attributes::factory($data->attributes));
@@ -154,7 +152,7 @@ class Resource extends json_ready
     {
 
         if(empty($name))
-            throw new \Exception("Not allowed: empty relation name.");
+            throw new \Exception("Not allowed: empty relation name.",500);
 
         // initializes relationships
         if(!isset($this->relationships)) {

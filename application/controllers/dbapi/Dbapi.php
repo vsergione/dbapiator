@@ -203,7 +203,7 @@ class Dbapi extends CI_Controller
         $apiCfg = array_merge_recursive($permissions,$structure);
 
 //        print_r($apiCfg);
-
+        error_reporting(0);
         /**
          * @var CI_DB_pdo_driver db
          */
