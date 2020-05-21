@@ -1028,8 +1028,9 @@ class Dbapi extends CI_Controller
      * @param $tableName
      * @param $recId
      */
-    function deleteSingleRecord($tableName, $recId)
+    function deleteSingleRecord($configName,$tableName, $recId)
     {
+        $this->_init($configName);
         try {
             $this->recs->deleteById($tableName, $recId);
             HttpResp::no_content(204);
