@@ -285,7 +285,7 @@ class Dbapi extends CI_Controller
 
         if(in_array("application/x-www-form-urlencoded",$cType)) {
             $inputData = json_decode(json_encode($this->input->post()));
-            print_r($this->input->raw_input_stream);
+//            print_r($this->input->raw_input_stream);
             validate_body_data($inputData);
             return $inputData;
         }
@@ -842,6 +842,22 @@ class Dbapi extends CI_Controller
                 JSONApi\Document::error_doc($this->JsonApiDocOptions, JSONApi\Error::from_exception($e) )->json_data()
             );
         }
+
+        if(!is_object($inputData->data)) {
+            $e = new Exception("Invalid input data.\n$.data expected to be an object.");
+            HttpResp::json_out(
+                400,
+                JSONApi\Document::error_doc($this->JsonApiDocOptions, JSONApi\Error::from_exception($e) )->json_data()
+            );
+        }
+
+        if(!isset($inputData->data->attributes)) {
+            $inputData->data->attributes = new stdClass();
+        }
+
+
+        $fldName = $rel["field"];
+        $inputData->data->attributes->$fldName = $recId;
 
         $fld = $rel["field"];
         $this->createSingleRecord($configName,$rel["table"],$inputData);
