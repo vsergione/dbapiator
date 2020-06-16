@@ -393,62 +393,38 @@ class Datamodel {
         }
 
         switch($fields[$fieldName]["type"]["proto"]) {
-            // numeric types
-            case "tinyint":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "smallint":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "mediumint":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "int":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "bigint":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "decimal":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
             case "float":
                 if(is_numeric($value))
                     $value =floatval($value);
                 if(in_array(gettype($value), ["float","double","integer"]))
                     return $value;
                 break;
+            // numeric types
+            case "smallint":
+            case "mediumint":
+            case "int":
+            case "bigint":
+            case "decimal":
+            case "tinyint":
+                if(is_numeric($value)) {
+                    return $value*1;
+                }
+                break;
+            case "real":
+            case "bit":
             case "double":
                 if(is_numeric($value)) {
                     return floatval($value);
                 }
                 break;
-            case "real":
-                if(is_numeric($value)) {
-                    return floatval($value);
-                }
-                break;
-            case "bit":
-                if(is_numeric($value)) {
-                    return floatval($value);
-                }
-                break;
             case "boolean":
+//                var_dump($value);
                 if(is_bool($value)) {
-                    return $value;
+                    return boolval($value);
                 }
+                $boolmap = ["true"=>true,"1"=>true,"0"=>false,"false"=>false];
+                if(isset($boolmap[$value]))
+                    return $boolmap[$value];
                 break;
             case "serial":
                 if(is_numeric($value)) {
