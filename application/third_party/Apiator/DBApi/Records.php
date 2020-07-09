@@ -43,16 +43,16 @@ class Records {
      * @param \CI_DB_query_builder $dbDriver
      * @param Datamodel $dataModel
      */
-    function __construct($dbDriver,$dataModel) {
+    function __construct($dbDriver,$dataModel,$apiConfigDir) {
         $this->dm = $dataModel;
         $this->dbdrv = $dbDriver;
         $instance = get_instance();
         $this->maxNoRels = $instance->config->item("inbound_relationships_page_size");
-        $this->configDir = $instance->config->item("api_config_dir");
+        $this->configDir = $apiConfigDir;
     }
 
-    static function init($dbDriver,$dataModel) {
-        return new Records($dbDriver,$dataModel);
+    static function init($dbDriver,$dataModel,$apiConfigDir) {
+        return new Records($dbDriver,$dataModel,$apiConfigDir);
     }
 
 
@@ -532,7 +532,7 @@ class Records {
             $tmp = explode(",",$fldsStr);
             foreach ($tmp as $fld) {
                 if($this->dm->is_valid_field($res,$fld))
-                    $opts->fields[$res][] = $fld;
+                    $opts['fields'][$res][] = $fld;
                 else
                     throw new \Exception("Invalid field name $res.$fld",401);
             }
@@ -559,7 +559,7 @@ class Records {
             ." WHERE $whereStr"
             ." ORDER BY $orderStr"
             ." LIMIT {$opts['offset']}, {$opts['limit']}";
-         //echo $mainSql."\n";
+//         echo $mainSql."\n";
 
 
         // run query

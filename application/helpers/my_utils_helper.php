@@ -96,6 +96,16 @@ function generate_where_str($where) {
     return $str;
 }
 
+/**
+ * @param $from
+ * @param $joins
+ * @param null $whereArr
+ * @param null $orderByArr
+ * @param null $offset
+ * @param null $limit
+ * @param null $groupBy
+ * @return array
+ */
 function render_select_query($from, $joins, $whereArr=null, $orderByArr=null, $offset=null, $limit=null,$groupBy=null) {
     // prepare selected fields statement
     $fieldsArr = [];

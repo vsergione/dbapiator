@@ -25,7 +25,7 @@ class DBWalk
         $structure = [];
         $permissions  = [];
 
-        // get structure
+        // read DB structure
         $sql = "SELECT * FROM `information_schema`.`TABLES` where TABLE_SCHEMA='$dbName'";
         $res = $db->query($sql)->result();
         foreach($res as $rec) {
@@ -47,7 +47,7 @@ class DBWalk
 
         }
 
-        // get views
+        // get views list
         $sql = "SELECT * FROM `information_schema`.`VIEWS` where TABLE_SCHEMA='$dbName'";
         $res = $db->query($sql)->result();
         foreach($res as $rec) {
@@ -89,6 +89,7 @@ class DBWalk
                 "required" => !($item->IS_NULLABLE=="YES" ||  $item->EXTRA=="auto_increment" || $item->COLUMN_DEFAULT),
                 "default" => $item->COLUMN_DEFAULT,
             ];
+
             if($item->COLUMN_KEY==="PRI")
                 $structure[$item->TABLE_NAME]["keyFld"] = $item->COLUMN_NAME;
             if($item->COLUMN_KEY==="UNI" && !$structure[$item->TABLE_NAME]["keyFld"])
@@ -139,7 +140,6 @@ class DBWalk
                     if(isset($structure[$fldSpec["foreignKey"]["table"]]["relations"][$tableName])) {
                         $tmp = $structure[$fldSpec["foreignKey"]["table"]]["relations"][$tableName];
                         $structure[$fldSpec["foreignKey"]["table"]]["relations"][$tableName."_".$tmp["field"]] = $tmp;
-                        print_r($tmp);
                         $tmpFld = $tmp["field"];
 
                         $tmp = $permissions[$fldSpec["foreignKey"]["table"]]["relations"][$tableName];

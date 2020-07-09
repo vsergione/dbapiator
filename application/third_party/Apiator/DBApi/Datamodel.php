@@ -141,6 +141,7 @@ class Datamodel {
      */
     function field_is_sortable($resName, $fldName)
     {
+//        print_r($this->dataModel[$resName]["fields"][$fldName]);
         if(!isset($this->dataModel[$resName]["fields"][$fldName]))
             throw new \Exception("Invalid field $fldName (is_sortable)",400);
         return isset($this->dataModel[$resName]["fields"][$fldName]["sortable"])?
@@ -157,7 +158,7 @@ class Datamodel {
     function field_is_searchable($resName, $fldName)
     {
         if(!isset($this->dataModel[$resName]["fields"][$fldName]))
-            throw new \Exception("Invalid field $resName.   $fldName (is_searchable)",400);
+            throw new \Exception("Invalid field $resName.$fldName (is_searchable)",400);
 
         return isset($this->dataModel[$resName]["fields"][$fldName]["searchable"])?
             $this->dataModel[$resName]["fields"][$fldName]["searchable"]:

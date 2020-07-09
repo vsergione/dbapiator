@@ -225,7 +225,7 @@ class Dbapi extends CI_Controller
         $this->apiSettings = $settings;
 
         // initialize recs
-        $this->recs = \Apiator\DBApi\Records::init($this->apiDb,$this->apiDm);
+        $this->recs = \Apiator\DBApi\Records::init($this->apiDb,$this->apiDm,$this->apiConfigDir);
         if(!$this->recs) {
             // TODO log unable to initialize records navigator class
             HttpResp::server_error("Invalid API config");
@@ -587,7 +587,6 @@ class Dbapi extends CI_Controller
                 $queryParas["update"] = $updateFields;
             }
         }
-
         return $queryParas;
     }
 
