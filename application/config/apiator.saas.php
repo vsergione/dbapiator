@@ -11,7 +11,7 @@ define("BASE_DOMAIN",".dbapi.apiator");
 define("APIS_DIR","/var/www/domains/apiator/apiator_data/___apis");
 define("CFG_DIR_REL_PATH","/dbapi");
 
-$config["default_page_size_limit"] = 10;
+$config["default_page_size"] = 10;
 
 $config["default_resource_access_read"] = true;
 $config["default_resource_access_update"] = true;

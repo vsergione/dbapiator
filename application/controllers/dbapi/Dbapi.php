@@ -34,9 +34,6 @@ require_once(APPPATH."third_party/Apiator/Autoloader.php");
  */
 class Dbapi extends CI_Controller
 {
-    private $default_options = [
-        "page[offset]"=>"0"
-    ];
     /**
      * @var CI_DB_pdo_driver
      */
@@ -501,7 +498,11 @@ class Dbapi extends CI_Controller
 
             $_GET["filter"] = "id=".$recId;
             $qp = $this->getQueryParameters($resourceName);
-            $qp["offset"] = 0;
+            $qp["paging"] = [
+                $resourceName => [
+                    "offset" => 0
+                ]
+            ];
 
             $this->getRecords($configName,$resourceName,$recId,$qp);
         }
@@ -553,19 +554,23 @@ class Dbapi extends CI_Controller
                 $queryParas["fields"] = $flds;
         }
 
-        // extract paging parameters
-        $queryParas["offset"] = 0;
-        if($page = $input->get("page")) {
-            // get offset
-            if(isset($page["offset"]) && preg_match("/^\d+$/",$page["offset"]))
-                $queryParas["offset"] = intval($page["offset"]);
-            else
-                $queryParas["offset"] = 0;
+        $queryParas["paging"] = [];
 
-            // get limit
-            if(isset($page["limit"])  && preg_match("/^\d+$/",$page["limit"]))
-                $queryParas["limit"] = intval($page["limit"]);
-        }
+        // get paging fieldset fields
+        $paging = $input->get("page");
+        if(is_array($paging))
+            $queryParas["paging"] = $paging;
+        if(!isset($queryParas["paging"][$resName]))
+            $queryParas["paging"][$resName] = [];
+        if(isset($queryParas["paging"]["limit"]))
+            $queryParas["paging"][$resName]["limit"] = $queryParas["paging"]["limit"];
+        if(isset($queryParas["paging"]["offset"]))
+            $queryParas["paging"][$resName]["offset"] = $queryParas["paging"]["offset"];
+
+
+
+        if(!isset($queryParas["paging"][$resName]))
+            $queryParas["paging"][$resName] = ["offset"=>0];
 
         // get filter
         if($filterStr = $input->get("filter")) {
@@ -642,8 +647,9 @@ class Dbapi extends CI_Controller
             else {
                 $doc->setData($records);
                 $offset = 0;
-                if(isset($queryParameters["offset"]))
-                    $offset = $queryParameters["offset"];
+                if(isset($queryParameters["paging"]) && isset($queryParameters["paging"][$resourceName])
+                    && isset($queryParameters["paging"][$resourceName]["offset"]))
+                    $offset = $queryParameters["paging"][$resourceName]["offset"];
                 $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$offset,"totalRecords"=>$totalRecords]));
 
             }
@@ -711,7 +717,7 @@ class Dbapi extends CI_Controller
                 ],true);
 
                 $db->query("INSERT INTO test values(2,2,2) ON DUPLICATE KEY UPDATE dd=dd");
-                echo $db->affected_rows();
+//                echo $db->affected_rows();
                 break;
             default:
                 $this->load->view("test");

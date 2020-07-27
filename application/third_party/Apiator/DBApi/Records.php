@@ -383,6 +383,15 @@ class Records {
                 $options = (array)$options;
                 $options["filter"] = $filter;
                 $options["limit"] = $this->maxNoRels;
+                if(!isset($options["paging"][$incNode["table"]]))
+                    $options["paging"][$incNode["table"]] = [
+                        "offset"=>0
+                    ];
+                if(!isset($options["paging"][$incNode["table"]]["limit"]))
+                    $options["paging"][$incNode["table"]]["limit"] = get_instance()->config->item("default_relationships_page_size");
+                if($options["paging"][$incNode["table"]]["limit"]>get_instance()->config->item("max_page_size"))
+                    $options["paging"][$incNode["table"]]["limit"] = get_instance()->config->item("max_page_size");
+//                print_r($options);
                 list($rec->relationships->$fk->data,$rec->relationships->$fk->total) = $this->getRecords($incNode["table"],$options);
             }
         }
@@ -480,7 +489,6 @@ class Records {
      */
     function getRecords($resourceName, $opts=[])
     {
-
         // check if resource exists
         if(!$this->dm->resource_exists($resourceName))
             throw new \Exception("Resource '$resourceName' not found",404);
@@ -492,24 +500,16 @@ class Records {
         $cfg = $this->dm->get_config($resourceName);
         $tableName = isset($cfg["name"])?$cfg["name"]:$resourceName;
 
-        $cfgLimit = get_instance()->config->item("default_page_size_limit");
-        if(!intval($cfgLimit)) {
-            log_message('error','Invalid default_page_size_limit');
-            $cfgLimit = 10;
-        }
-
         // prepare parameters
         $defaultOpts = [
             "includeStr" => [],
             "fields" => [],
             "filter"=>[],
-            "offset"=>0,
-            "limit"=>null,
+            "paging"=>[],
             "order"=>[]
         ];
 
         $opts = array_merge($defaultOpts,$opts);
-        $opts['limit'] = $opts['limit']?$opts['limit']:$cfgLimit;
 
         if(!array_key_exists("custom_where",$opts)) {
             $whereStr = $this->generateWhereSQL($opts['filter'],$tableName);
@@ -521,7 +521,7 @@ class Records {
 
         // extract total number of records matched by the query
         $countSql = "SELECT count(*) as `cnt` FROM `$tableName` WHERE $whereStr";
-        $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
+        $totalRecs = $this->dbdrv->query($countSql)->row()->cnt*1;
 //        echo $countSql;
         // return if no records matched
         if($totalRecs==0) return [[],0];
@@ -548,19 +548,20 @@ class Records {
 
         $ttt = $this->generateSqlParts($tableName,$opts['includeStr'],$opts['fields']);
         list($select,$join,$relTree) = $ttt;
-//        echo "\n\n$tableName reltree\n";
-//        print_r($relTree);
+
+        list($offset,$limit) = $this->get_paging($resourceName,@$opts["paging"]);
+
         // prepare ORDER BY part
         $orderStr = $this->generateSortSQL($opts['order'],$tableName);
+
 
         // compile SELECT
         $mainSql = "SELECT $select FROM `{$relTree[$tableName]["name"]}` AS `{$relTree[$tableName]["alias"]}` "
             .($join!==""?$join:"")
             ." WHERE $whereStr"
             ." ORDER BY $orderStr"
-            ." LIMIT {$opts['offset']}, {$opts['limit']}";
+            ." LIMIT $offset, $limit";
 //         echo $mainSql."\n";
-
 
         // run query
         /** @var \CI_DB_result $res */
@@ -634,7 +635,7 @@ class Records {
 
         //$table = $data->type;
         if($data->type!=$table)
-            throw new \Exception("Invalid data type '$data->type' '$table'",400);
+            throw new \Exception("Invalid data type '$data->type' for '$table'",400);
 
         // check if resource exists
         if(!$this->dm->resource_exists($table))
@@ -819,7 +820,7 @@ class Records {
             $selSql = $this->dbdrv
                 ->where($insertData)
                 ->get_compiled_select($table);
-            //print_r($selSql);
+//            print_r($selSql);
 
             $q = $this->dbdrv->query($selSql);
             get_instance()->debug_log($selSql);
@@ -1095,7 +1096,8 @@ class Records {
      * @return bool
      * @throws \Exception
      */
-    function deleteByWhere($tableName,$where) {
+    function deleteByWhere($tableName,$where)
+    {
         // check if resource exists
         if(!$this->dm->resource_exists($tableName))
             throw new \Exception("Resource '$tableName' not found",404);
@@ -1133,4 +1135,25 @@ class Records {
             return property_exists($obj,"attributes")?"newResourceObject":"InvalidObject";
     }
 
+
+    function get_paging($resName,$paging)
+    {
+//        print_r($resName);
+//        print_r($paging);
+        $instance = get_instance();
+        $offset = 0;
+        $limit = $instance->config->item("default_page_size");
+        if (!isset($paging) || !isset($paging[$resName]))
+            return [$offset,$limit];
+
+        if(isset($paging[$resName]["offset"]))
+            $offset = $paging[$resName]["offset"];
+
+        if(isset($paging[$resName]["limit"]) && $paging[$resName]["limit"]*1<$instance->config->item("max_page_size"))
+            $limit = $paging[$resName]["limit"];
+
+        return [$offset,$limit];
+    }
+
 }
+
