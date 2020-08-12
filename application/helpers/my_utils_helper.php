@@ -233,7 +233,7 @@ function get_filter($rawFilterStr, $defaultTable)
         if(!empty($m)) {
             $alias = empty($m[3])?$defaultTable:$m[1];
             $fieldName = empty($m[3])?$m[1]:$m[3];
-            $filters[$alias.".".$fieldName] = (object) [
+            $filters[$alias.".".$fieldName.rand(0,1000)] = (object) [
                 "left"=>(object) [
                     "alias"=>$alias,
                     "field"=>$fieldName
@@ -243,6 +243,7 @@ function get_filter($rawFilterStr, $defaultTable)
             ];
         }
     }
+//    print_r($filters);
     return $filters;
 }
 
