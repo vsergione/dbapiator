@@ -54,7 +54,7 @@ You can create your first REST API either as part of the install process or by r
     > setup.php setupdb  
     
 ## Usage
-Once a REST API has been created you it is available at the following URL:
+Once a REST API has been created, it is available at the following URL:
 https://your_host/dbapi_install_location/v2/project_name
 
 For every API the available endpoints are generated according to the following rules

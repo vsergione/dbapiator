@@ -429,12 +429,17 @@ class Records {
      */
     private function generateWhereSQL($filters, $resName)
     {
+        // todo: correct filtering.... after allowing searching by fields beloning to joined tables...
         $whereArr = [];
         foreach ($filters as $filter) {
-            if ($filter->left->alias == $resName
-                && $this->dm->field_is_searchable($resName, $filter->left->field)) {
+//            if ($this->dm->field_is_searchable($resName, $filter->left->field)) {
                 $whereArr[] = generate_where_str($filter);
-            }
+//            }
+//            if ($filter->left->alias == $resName
+//                && $this->dm->field_is_searchable($resName, $filter->left->field)) {
+//                $whereArr[] = generate_where_str($filter);
+//            }
+//
         }
         return count($whereArr) ? implode(" AND ", $whereArr) : 1;
     }
@@ -510,6 +515,8 @@ class Records {
         ];
 
         $opts = array_merge($defaultOpts,$opts);
+        // debug
+//        if($_GET['dbg']) print_r($opts);
 
         if(!array_key_exists("custom_where",$opts)) {
             $whereStr = $this->generateWhereSQL($opts['filter'],$tableName);
@@ -517,14 +524,9 @@ class Records {
         else {
             $whereStr = $opts['custom_where'];
         }
+//        if($_GET['dbg']) print_r($whereStr);
 
 
-        // extract total number of records matched by the query
-        $countSql = "SELECT count(*) as `cnt` FROM `$tableName` WHERE $whereStr";
-        $totalRecs = $this->dbdrv->query($countSql)->row()->cnt*1;
-//        echo $countSql;
-        // return if no records matched
-        if($totalRecs==0) return [[],0];
 
         // prepare field selection (validate and ....
         foreach ($opts['fields'] as $res=>$fldsStr) {
@@ -546,13 +548,24 @@ class Records {
             $opts['includeStr'] = $includeStr===""?[]:explode(",",$includeStr);
         }
 
-        $ttt = $this->generateSqlParts($tableName,$opts['includeStr'],$opts['fields']);
-        list($select,$join,$relTree) = $ttt;
+        list($select,$join,$relTree) = $this->generateSqlParts($tableName,$opts['includeStr'],$opts['fields']);
 
         list($offset,$limit) = $this->get_paging($resourceName,@$opts["paging"]);
 
         // prepare ORDER BY part
         $orderStr = $this->generateSortSQL($opts['order'],$tableName);
+
+
+        // extract total number of records matched by the query
+        $countSql = "SELECT count(*) cnt FROM `{$relTree[$tableName]["name"]}` AS `{$relTree[$tableName]["alias"]}` "
+            .($join!==""?$join:"")
+            ." WHERE $whereStr";
+//        echo $countSql;
+
+        $row = $this->dbdrv->query($countSql)->row();
+        $totalRecs =$row->cnt*1;
+        // return if no records matched
+        if($totalRecs==0) return [[],0];
 
 
         // compile SELECT

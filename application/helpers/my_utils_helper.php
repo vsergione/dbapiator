@@ -243,7 +243,7 @@ function get_filter($rawFilterStr, $defaultTable)
             ];
         }
     }
-//    print_r($filters);
+//    if($_GET['dbg']) print_r($filters);
     return $filters;
 }
 
