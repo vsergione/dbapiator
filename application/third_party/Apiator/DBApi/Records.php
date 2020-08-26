@@ -817,7 +817,7 @@ class Records {
             // todo: log message to the app log file
             $sqlErr = $this->dbdrv->error();
             log_message("error",$sqlErr["message"]." > $insSql");
-            throw new \Exception($sqlErr["message"], 500);
+            throw new \Exception($sqlErr["message"]."\n".$this->dbdrv->last_query(), 500);
         }
 
         // retrieve resource ID (mysql specific)
