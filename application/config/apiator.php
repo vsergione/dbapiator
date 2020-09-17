@@ -8,7 +8,6 @@
 defined('BASEPATH') OR exit('No direct script access allowed');
 define("CFG_DIR_BASEPATH","/var/www/apps/dbapi/apis");
 
-
 $config["default_resource_access_read"] = true;
 $config["default_resource_access_update"] = true;
 $config["default_resource_access_insert"] = true;
@@ -19,6 +18,7 @@ $config["default_field_access_update"] = true;
 $config["default_field_access_select"] = true;
 $config["default_field_access_sort"] = true;
 $config["default_field_access_search"] = true;
+
 
 
 // default record set page size
