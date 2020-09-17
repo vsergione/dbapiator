@@ -152,7 +152,7 @@ class Dbapi extends CI_Controller
 
         $this->apiConfigDir = $this->config->item("api_config_dir")($configName);
 
-        $this->baseUrl = "https://".$_SERVER["SERVER_NAME"]."/v2";
+        $this->baseUrl = $this->config->item("base_url")."/v2";
         $this->JsonApiDocOptions["baseUrl"] = $this->baseUrl;
 
         if(!is_dir($this->apiConfigDir)) {
