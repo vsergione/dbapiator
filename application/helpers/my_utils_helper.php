@@ -1,49 +1,49 @@
 <?php
 
 require_once(__DIR__."/../libraries/Response.php");
-
-/**
- * @param int $httpCode
- * @param string $payload
- * @param string $location
- * @param string $encoding
- * @return null
- */
-function http_respond($httpCode=200,$payload=null,$location=null,$encoding="application/json") {
-    http_response_code($httpCode);
-    header("Access-Control-Allow-Origin: *");
-    header("Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, PUT");
-    header("Access-Control-Allow-Credentials: true");
-    header("Access-Control-Allow-Headers: origin, content-type, accept");
-    header("Cache-Control: no-cache, no-store, must-revalidate");
-    header("Pragma: no-cache");
-    header("Expires: 0");
-
-    if($location)
-        header("Location: $location");
-
-    if($httpCode!=array("204"))
-        header("Content-type: $encoding");
-
-    echo $payload;
-    die();
-}
-
-
-
-/**
- * @param int $length
- * @return string
- */
-function generateRandomString($length = 10) {
-    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    $charactersLength = strlen($characters);
-    $randomString = '';
-    for ($i = 0; $i < $length; $i++) {
-        $randomString .= $characters[rand(0, $charactersLength - 1)];
-    }
-    return $randomString;
-}
+//
+///**
+// * @param int $httpCode
+// * @param string $payload
+// * @param string $location
+// * @param string $encoding
+// * @return null
+// */
+//function http_respond($httpCode=200,$payload=null,$location=null,$encoding="application/json") {
+//    http_response_code($httpCode);
+//    header("Access-Control-Allow-Origin: *");
+//    header("Access-Control-Allow-Methods: POST, GET, OPTIONS, DELETE, PUT");
+//    header("Access-Control-Allow-Credentials: true");
+//    header("Access-Control-Allow-Headers: origin, content-type, accept");
+//    header("Cache-Control: no-cache, no-store, must-revalidate");
+//    header("Pragma: no-cache");
+//    header("Expires: 0");
+//
+//    if($location)
+//        header("Location: $location");
+//
+//    if($httpCode!=array("204"))
+//        header("Content-type: $encoding");
+//
+//    echo $payload;
+//    die();
+//}
+//
+//
+//
+///**
+// * @param int $length
+// * @return string
+// */
+//function generateRandomString($length = 10) {
+//    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+//    $charactersLength = strlen($characters);
+//    $randomString = '';
+//    for ($i = 0; $i < $length; $i++) {
+//        $randomString .= $characters[rand(0, $charactersLength - 1)];
+//    }
+//    return $randomString;
+//}
 
 
 
@@ -95,64 +95,64 @@ function generate_where_str($where) {
 
     return $str;
 }
-
-/**
- * @param $from
- * @param $joins
- * @param null $whereArr
- * @param null $orderByArr
- * @param null $offset
- * @param null $limit
- * @param null $groupBy
- * @return array
- */
-function render_select_query($from, $joins, $whereArr=null, $orderByArr=null, $offset=null, $limit=null,$groupBy=null) {
-    // prepare selected fields statement
-    $fieldsArr = [];
-    $fieldsArr[] = $from["table"].".".implode(",".$from["table"].".",$from["fields"]);
-
-
-    // prepare JOIN statement
-    $joinArr = [];
-    foreach ($joins as $fld=>$join) {
-        $fieldsArr[] = $join["alias"].".".implode(",".$join["alias"].".",$join["fields"]);
-        $joinArr[] = sprintf("LEFT JOIN %s AS %s ON %s=%s",$join["table"], $join["alias"], $join["left"], $join["right"]);
-    }
-
-    // prepare where statement
-    $sqlWhere = 1;
-    if(!empty($whereArr))
-        $sqlWhere = implode(" AND ",$whereArr);
-
-    // prepare order statement
-    $sqlOrder = "1";
-    if(!empty($orderByArr))
-        $sqlOrder = implode(", ",$orderByArr);
-
-    // prepare limit statement
-    $sqlLimit = "";
-    if(is_numeric($offset) && is_numeric($limit))
-        $sqlLimit = "LIMIT $offset,$limit";
-
-    $sqlGroup = ($groupBy)?"GROUP BY $groupBy":"";
-
-    $countSql = sprintf("SELECT count(*) as cnt FROM %s WHERE %s %s",
-        $from["table"],
-        //implode(" ", $joinArr),
-        $sqlWhere,
-        $sqlGroup);
-    $mainSql = sprintf("SELECT %s FROM %s %s WHERE %s %s ORDER BY %s %s",
-        implode(",", $fieldsArr),
-        $from["table"],
-        implode(" ", $joinArr),
-        $sqlWhere,
-        $sqlGroup,
-        $sqlOrder,
-        $sqlLimit
-    );
-
-    return array($countSql,$mainSql);
-}
+//
+///**
+// * @param $from
+// * @param $joins
+// * @param null $whereArr
+// * @param null $orderByArr
+// * @param null $offset
+// * @param null $limit
+// * @param null $groupBy
+// * @return array
+// */
+//function render_select_query($from, $joins, $whereArr=null, $orderByArr=null, $offset=null, $limit=null,$groupBy=null) {
+//    // prepare selected fields statement
+//    $fieldsArr = [];
+//    $fieldsArr[] = $from["table"].".".implode(",".$from["table"].".",$from["fields"]);
+//
+//
+//    // prepare JOIN statement
+//    $joinArr = [];
+//    foreach ($joins as $fld=>$join) {
+//        $fieldsArr[] = $join["alias"].".".implode(",".$join["alias"].".",$join["fields"]);
+//        $joinArr[] = sprintf("LEFT JOIN %s AS %s ON %s=%s",$join["table"], $join["alias"], $join["left"], $join["right"]);
+//    }
+//
+//    // prepare where statement
+//    $sqlWhere = 1;
+//    if(!empty($whereArr))
+//        $sqlWhere = implode(" AND ",$whereArr);
+//
+//    // prepare order statement
+//    $sqlOrder = "1";
+//    if(!empty($orderByArr))
+//        $sqlOrder = implode(", ",$orderByArr);
+//
+//    // prepare limit statement
+//    $sqlLimit = "";
+//    if(is_numeric($offset) && is_numeric($limit))
+//        $sqlLimit = "LIMIT $offset,$limit";
+//
+//    $sqlGroup = ($groupBy)?"GROUP BY $groupBy":"";
+//
+//    $countSql = sprintf("SELECT count(*) as cnt FROM %s WHERE %s %s",
+//        $from["table"],
+//        //implode(" ", $joinArr),
+//        $sqlWhere,
+//        $sqlGroup);
+//    $mainSql = sprintf("SELECT %s FROM %s %s WHERE %s %s ORDER BY %s %s",
+//        implode(",", $fieldsArr),
+//        $from["table"],
+//        implode(" ", $joinArr),
+//        $sqlWhere,
+//        $sqlGroup,
+//        $sqlOrder,
+//        $sqlLimit
+//    );
+//
+//    return array($countSql,$mainSql);
+//}
 
 /**
  * extracts include from GET
@@ -166,54 +166,54 @@ function get_include($input)
     return explode(",",$input->get("include"));
 }
 
-/**
- * extracts fields from GET
- * @param CI_Input $input
- * @param string $defaultTable
- * @return array
- */
-function get_fields($input,$defaultTable)
-{
-    $fields = [];
-    if(empty($input->get("fields")))
-        return $fields;
+///**
+// * extracts fields from GET
+// * @param CI_Input $input
+// * @param string $defaultTable
+// * @return array
+// */
+//function get_fields($input,$defaultTable)
+//{
+//    $fields = [];
+//    if(empty($input->get("fields")))
+//        return $fields;
+//
+//    $tmp = explode(",",$input->get("fields"));
+//    for($i=0;$i<count($tmp);$i++) {
+//        $t = explode(".",$tmp[$i]);
+//        if(count($t)==1) {
+//            $fields[$defaultTable][] = $tmp[$i];
+//        }
+//        elseif(count($t)==2) {
+//            $fields[$t[0]][] = $t[1];
+//        }
+//    }
+//
+//    return $fields;
+//}
 
-    $tmp = explode(",",$input->get("fields"));
-    for($i=0;$i<count($tmp);$i++) {
-        $t = explode(".",$tmp[$i]);
-        if(count($t)==1) {
-            $fields[$defaultTable][] = $tmp[$i];
-        }
-        elseif(count($t)==2) {
-            $fields[$t[0]][] = $t[1];
-        }
-    }
-
-    return $fields;
-}
-
-/**
- * @param CI_Input $input
- * @param $defaultTable
- * @return array|null
- */
-function get_updatefields($input,$defaultTable) {
-    if(empty($input->get("update")))
-       return null;
-    
-    $update = [];
-    
-    foreach(explode(",",$input->get("update")) as $fld) {
-        $pair = explode(".",$fld);
-        $tbl = count($pair)==1?$defaultTable:$pair[0];
-        $fld = count($pair)==1?$pair[0]:$pair[1];
-        if(!isset($update[$tbl]))
-            $update[$tbl] = [];
-        if(!in_array($fld,$update[$tbl]))
-            $update[$tbl][] = $fld;
-    }
-    return $update;
-}
+///**
+// * @param CI_Input $input
+// * @param $defaultTable
+// * @return array|null
+// */
+//function get_updatefields($input,$defaultTable) {
+//    if(empty($input->get("update")))
+//       return null;
+//
+//    $update = [];
+//
+//    foreach(explode(",",$input->get("update")) as $fld) {
+//        $pair = explode(".",$fld);
+//        $tbl = count($pair)==1?$defaultTable:$pair[0];
+//        $fld = count($pair)==1?$pair[0]:$pair[1];
+//        if(!isset($update[$tbl]))
+//            $update[$tbl] = [];
+//        if(!in_array($fld,$update[$tbl]))
+//            $update[$tbl][] = $fld;
+//    }
+//    return $update;
+//}
 
 /**
  * extracts filters from GET
@@ -350,97 +350,97 @@ function validate_body_data($inputData) {
 
 }
 
-/**
- * validates $data as a JSON API document
- * @param $data
- * @param array $requiredAttributes
- * @throws Exception
- */
-function validatePostData($data, $requiredAttributes=[]) {
-    if(!is_object($data))
-        throw new Exception("Invalid top level data: not an object",400);
-    if(!property_exists($data,"data"))
-        throw new Exception("Invalid input object: missing 'data' property",400);
+///**
+// * validates $data as a JSON API document
+// * @param $data
+// * @param array $requiredAttributes
+// * @throws Exception
+// */
+//function validatePostData($data, $requiredAttributes=[]) {
+//    if(!is_object($data))
+//        throw new Exception("Invalid top level data: not an object",400);
+//    if(!property_exists($data,"data"))
+//        throw new Exception("Invalid input object: missing 'data' property",400);
+//
+//    if(!in_array(gettype($data),["array","object"])) {
+//        throw new Exception("Invalid data. Must be array or object", 400);
+//    }
+//
+//    $entries = !is_array($data->data)?[$data->data]:$data->data;
+//
+//    if($requiredAttributes!==[])
+//        foreach($entries as $entry) {
+//            isValidPostDataEntry($entry,$requiredAttributes);
+//        }
+//
+//}
 
-    if(!in_array(gettype($data),["array","object"])) {
-        throw new Exception("Invalid data. Must be array or object", 400);
-    }
+///**
+// * validates $data as a JSON API document
+// * @param $data
+// * @param array $requiredAttributes
+// * @throws Exception
+// */
+//function validatePostDataArray($data, $requiredAttributes=[]) {
+//    if(!is_object($data))
+//        throw new Exception("Invalid top level data: not an object",400);
+//
+//    if(!property_exists($data,"data"))
+//        throw new Exception("Invalid input object: missing 'data' property",400);
+//
+//    if(gettype($data)!=="array") {
+//        throw new Exception("Invalid data. Must be an array", 400);
+//    }
+//
+//    if($requiredAttributes!==[]) {
+//        $entries = $data->data;
+//
+//        foreach ($entries as $entry) {
+//            isValidPostDataEntry($entry, $requiredAttributes);
+//        }
+//    }
+//}
 
-    $entries = !is_array($data->data)?[$data->data]:$data->data;
+///**
+// * validates if $entry is a valid entry structure inside an JSONApi object
+// * does not valid contents against the prototype
+// * @param object $entry
+// * @param array $requiredAttributes
+// * @throws Exception
+// */
+//function isValidPostDataEntry($entry, $requiredAttributes=[]) {
+//    if(!is_object($entry))
+//        throw new Exception("Data entry not an object",400);
+//
+//    foreach ($requiredAttributes as $attr=>$attrType) {
+//        if(!isset($entry->$attr))
+//            throw new Exception("Resource object missing '$attr' property",400);
+//
+//        if(!is_null($attrType) && !in_array(gettype($entry->$attr),$attrType)) {
+//            //echo "..".gettype($entry->$attr)."--".implode(",",$attrType)."--";
+//            throw new Exception("Resource object attribute '$attr' is not a valid '" .
+//                implode(", ", $attrType) . "", 400);
+//        }
+//
+//    }
+//}
 
-    if($requiredAttributes!==[])
-        foreach($entries as $entry) {
-            isValidPostDataEntry($entry,$requiredAttributes);
-        }
-
-}
-
-/**
- * validates $data as a JSON API document
- * @param $data
- * @param array $requiredAttributes
- * @throws Exception
- */
-function validatePostDataArray($data, $requiredAttributes=[]) {
-    if(!is_object($data))
-        throw new Exception("Invalid top level data: not an object",400);
-
-    if(!property_exists($data,"data"))
-        throw new Exception("Invalid input object: missing 'data' property",400);
-
-    if(gettype($data)!=="array") {
-        throw new Exception("Invalid data. Must be an array", 400);
-    }
-
-    if($requiredAttributes!==[]) {
-        $entries = $data->data;
-
-        foreach ($entries as $entry) {
-            isValidPostDataEntry($entry, $requiredAttributes);
-        }
-    }
-}
-
-/**
- * validates if $entry is a valid entry structure inside an JSONApi object
- * does not valid contents against the prototype
- * @param object $entry
- * @param array $requiredAttributes
- * @throws Exception
- */
-function isValidPostDataEntry($entry, $requiredAttributes=[]) {
-    if(!is_object($entry))
-        throw new Exception("Data entry not an object",400);
-
-    foreach ($requiredAttributes as $attr=>$attrType) {
-        if(!isset($entry->$attr))
-            throw new Exception("Resource object missing '$attr' property",400);
-
-        if(!is_null($attrType) && !in_array(gettype($entry->$attr),$attrType)) {
-            //echo "..".gettype($entry->$attr)."--".implode(",",$attrType)."--";
-            throw new Exception("Resource object attribute '$attr' is not a valid '" .
-                implode(", ", $attrType) . "", 400);
-        }
-
-    }
-}
-
-/**
- * generates a cryptographical strong random string
- * @param int $len bytes length
- * @return string
- */
-function unique_id($len)
-{
-    return bin2hex(openssl_random_pseudo_bytes($len));
-}
+///**
+// * generates a cryptographical strong random string
+// * @param int $len bytes length
+// * @return string
+// */
+//function unique_id($len)
+//{
+//    return bin2hex(openssl_random_pseudo_bytes($len));
+//}
 
 
 
-/**
- * @param $obj
- * @throws \Exception
- */
+///**
+// * @param $obj
+// * @throws \Exception
+// */
 function is_valid_resource_object($obj) {
     if(!is_object($obj)) {
         throw new \Exception("Invalid resource: must be an object",400);
