@@ -3,17 +3,18 @@
 # Understanding PnPBase <a id='top'></a>
 
 At the core of the PnPBase stays the understanding that for most database driven applications the structure of the application's database acts like some sort of a DNA for the application itself.  
-  
-In order to illustrate the capabilities of PnPBase will take as an example an application intended to manage users, users groups (teams) and their assets. At the minimum level of detail the following database structure should be created. 
+
+In order to illustrate the capabilities of PnPBase will take as an example an application intended to manage users, users groups (teams) and their assets. At the minimum level of detail the following database structure should be created.
 
 # Database structure
-A database structure typically consists of various tables, views, stored procedures. In our case we will define 3 tables and 1 view. Further customization like triggers and user defined functions are part of the database design but PnPBase role is not to expose or use them directly. 
+A database structure typically consists of various tables, views, stored procedures. In our case we will define 3 tables and 1 view. Further customization like triggers and user defined functions are part of the database design but PnPBase role is not to expose or use them directly.
 
 Of course, various method calls of PnPBase, like POST, PATCH, DELETE might trigger certain triggers, and certain user defined functions might be called for example in a  VIEW "SELECT" definition, but PnPBase is agnostic in regard with these database features.
 
 ## Table "users"
 
 Used to store information about users, like: first name, last name, username, which team they belong to.
+
 | Field name | Type | Null | Xtra | Foreign Key |
 |--|--|--|--|--|
 | id | INT | NO | PRIMARY KEY | - |
@@ -40,6 +41,7 @@ Used to store information about team, like: team name, team leader id
 ## Table "assets"
 
 Used to store information about assets, like: type (laptop, phone, badge etc), make/brand and model, serial number , owner id.
+
 | Field name | Type | Null | Xtra | Foreign Key |
 |--|--|--|--|--|
 | id | INT | NO | PRIMARY KEY | - |
@@ -54,7 +56,7 @@ Used to store information about assets, like: type (laptop, phone, badge etc), m
 Because we want to check how many members each team has, we will create a VIEW using the following SQL:
 
     CREATE VIEW teams_count AS
-    SELECT team,count(*) AS cnt FROM users 
+    SELECT team,count(*) AS cnt FROM users
     GROUP BY team;
 
 ## View "teams_count"
@@ -101,7 +103,7 @@ In the second place, the field "team" can be considered a foreign key pointing t
 - [/teams_count/\$team_id/teams](#teams_count_id_teams)
 - [/teams/\$team_id/teams_count](#teams_id_teams_count)
 
-[^ Top](#top) 
+[^ Top](#top)
 
 ## /users
 
@@ -122,18 +124,18 @@ Retrieve records from table **users**
 	- **where**: alternate to "**filter**" parameter allowing to define more complex filtering conditions
 - responses:
 	- 200 OK
-	- 400 
+	- 400
 
 
 ### POST<a id='post_users'></a>
 Create new users
-- body data: 
-	- description: JSON:API document object containing one or more 
+- body data:
+	- description: JSON:API document object containing one or more
 	- syntax:
-	- example: 
-- responses: 
+	- example:
+- responses:
 
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 
 ## /users/$user_id <a id='users_id'></a>
@@ -157,7 +159,7 @@ Update user identified by ID
 
 ### DELETE<a id='delete_users_id'></a>
 
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /users/\$user_id/assets<a id='users_id_assets'></a>
 Endpoint for table assets to  create and retrieve records related to a record from table users identified by ID
@@ -173,7 +175,7 @@ Methods:
 
 ### DELETE <a id='delete_users_id_assets'></a>
 
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /users/\$user_id/assets/\$asset_id<a id='users_id_assets_id'></a>
 
@@ -188,7 +190,7 @@ Methods:
 
 ### DELETE <a id='delete_users_id_assets'></a>
 
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 
 ## /users/$id/teams <a id='users_id_teams'></a>
@@ -203,7 +205,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /teams/<a id='teams'></a>
 Methods:
@@ -215,7 +217,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /teams/\$team_id<a id='teams_id'></a>
 Methods:
@@ -227,7 +229,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 
 
@@ -241,7 +243,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 
 ## /teams/$team_id/users<a id='teams_id_users'></a>
@@ -254,7 +256,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /teams/$team_id/users/\$user_id<a id='teams_id_users_id'></a>
 Methods:
@@ -266,7 +268,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /teams/$team_id/teams_count<a id='teams_id_teams_count'></a>
 Methods:
@@ -278,7 +280,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /assets<a id='assets'></a>
 
@@ -291,7 +293,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 
 
@@ -307,7 +309,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /assets/$id/owner<a id='assets_id_owner'></a>
 Methods:
@@ -319,7 +321,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 
 ## /teams_count<a id='teams_count'></a>
@@ -333,7 +335,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /teams_count/$team_id<a id='teams_count_id'></a>
 
@@ -346,7 +348,7 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)
 
 ## /teams_count/$team_id/teams<a id='teams_count_id_teams'></a>
 
@@ -359,4 +361,4 @@ Methods:
 ### POST <a id='post_users_id_assets'></a>
 ### PATCH <a id='post_users_id_assets'></a>
 ### DELETE <a id='delete_users_id_assets'></a>
-[^ Endpoints](#endpoints) / [^ Top](#top) 
+[^ Endpoints](#endpoints) / [^ Top](#top)

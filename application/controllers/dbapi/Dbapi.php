@@ -1025,6 +1025,7 @@ class Dbapi extends CI_Controller
                 $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$insertedRecords)->json_data();
             HttpResp::json_out(200, $doc);
         }
+
         $err = \JSONApi\Error::factory(["code"=>400,"title"=>"No records inserted due to invalid input data"]);
         HttpResp::jsonapi_out(400,\JSONApi\Document::error_doc($this->JsonApiDocOptions,$err));
     }

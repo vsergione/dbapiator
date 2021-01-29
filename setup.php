@@ -13,8 +13,9 @@ if(count($argv)===1) {
     echo "Syntax: php setup.php [command] [OPTIONS]\n\n";
     echo "Description: Command line DB Apiator administration utility\n\n";
     echo "Commands:\n";
+    echo "    list: lists existing projects\n";
     echo "    install [/project_name/db_engine/db_host/db_user/db_pass/db_name]: Installs DbAPI on server by creating config files and\n";
-    echo "    newproject /project_name/db_engine/db_host/db_user/db_pass/db_name: Creates a REST API for a given database\n\n";
+    echo "    newproject /project_name/db_engine/db_host/db_user/db_pass/db_name: Creates a REST API for a given database\n";
     echo "    regen: Regenerates an existing API\n\n";
     echo "newproject Options:\n";
     echo "-c /project_name/db_engine/db_host/db_user/db_pass/db_name\n";
@@ -46,10 +47,24 @@ switch($cmd) {
     case "regen":
         regen($apisConfigDir,array_shift($argv));
         break;
+    case "list":
+        listProjects($apisConfigDir);
+        break;
     default:
         die("invalid command\n\n");
 }
+function listProjects($dir)
+{
+    $dp = opendir($dir);
+    $p = [];
+    while ($entry=readdir($dp)) {
+        if(in_array($entry,[".",".."]))
+            continue;
+        $p[] = $entry;
 
+    }
+    print_r($p);
+}
 function handle_apis_config_dir_creation($configDir)
 {
     // Projects base dir
@@ -132,15 +147,18 @@ function regen($configDir,$projName)
 {
     if(!$projName)
         die("Please specify a project name\n");
+
     $projPath = "$configDir/$projName";
     if(!is_dir($projPath))
         die("Project $projName not found\n");
+
     $conn = require_once "$projPath/connection.php";
     $args = [
             sprintf("/%s/%s/%s/%s/%s/%s",$projName,$conn["dbdriver"],$conn["hostname"],$conn["username"],$conn["password"],$conn["database"])
     ];
     if(is_file($projPath."/parse_helper.php"))
         $args[] = $projPath."/parse_helper.php";
+
     newproject($configDir,$args);
 }
 
@@ -185,18 +203,23 @@ function get_parameters($params)
     return [$projName,$cmd];
 }
 
-function handle_project_directory($configDir,$projName)
+function handle_project_directory($configDir,$projName,$existingProject)
 {
     $projPath = $configDir."/".$projName;
+    $dirExists = is_dir($projPath);
 
-    if(is_dir($projPath)) {
-        $read = readline("Project $projName already exists. Do you want to overwrite? ([Y]/N):");
-        if (!in_array(strtolower($read), ["y", ""]))
-            die("Setup canceled\n");
+    if(!$dirExists) {
+        if(!mkdir($projPath))
+            die("Could not create project directory '$projPath'");
     }
 
-    if(!mkdir($projPath))
-        die("Could not create project directory '$projPath'");
+    if(!$existingProject) {
+        $read = readline("Project $projName already exists. Do you want to overwrite? ([Y]/N):");
+        if (!in_array(strtolower($read), ["y", ""])) {
+            die("Setup canceled\n");
+        }
+    }
+
 
     return $projPath;
 }
@@ -220,13 +243,13 @@ function exec_gen($cli_args,$cmd,$projPath)
  * @param $configDir
  * @param $cli_args
  */
-function newproject($configDir, $cli_args) {
+function newproject($configDir, $cli_args, $existing=false) {
 
     // step 1: get project parameters
     list($projName,$cmd) = get_parameters($cli_args);
 
     // step 2: handle project directory
-    $projPath = handle_project_directory($configDir,$projName);
+    $projPath = handle_project_directory($configDir,$projName,$existing);
 
     // step 3: generated project files
     $ret = exec_gen($cli_args,$cmd,$projPath);
