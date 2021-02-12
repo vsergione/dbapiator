@@ -6,7 +6,7 @@ apiator_data
 test.php
 test.php.txt
 application/config/config.php
-application/config/apiator.php
+application/config/apiator.1.php
 application/logs
 application/controllers/Demooauth.php
 application/controllers/Errors.php
@@ -23,3 +23,5 @@ application/config/apiator/connection.php
 
 application/config/apiator/structure.php
 connections/*
+apis/*
+ezerp/*

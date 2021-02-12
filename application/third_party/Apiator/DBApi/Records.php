@@ -43,16 +43,16 @@ class Records {
      * @param \CI_DB_query_builder $dbDriver
      * @param Datamodel $dataModel
      */
-    function __construct($dbDriver,$dataModel) {
+    function __construct($dbDriver,$dataModel,$apiConfigDir) {
         $this->dm = $dataModel;
         $this->dbdrv = $dbDriver;
         $instance = get_instance();
         $this->maxNoRels = $instance->config->item("inbound_relationships_page_size");
-        $this->configDir = $instance->config->item("api_config_dir");
+        $this->configDir = $apiConfigDir;
     }
 
-    static function init($dbDriver,$dataModel) {
-        return new Records($dbDriver,$dataModel);
+    static function init($dbDriver,$dataModel,$apiConfigDir) {
+        return new Records($dbDriver,$dataModel,$apiConfigDir);
     }
 
 
@@ -383,6 +383,15 @@ class Records {
                 $options = (array)$options;
                 $options["filter"] = $filter;
                 $options["limit"] = $this->maxNoRels;
+                if(!isset($options["paging"][$incNode["table"]]))
+                    $options["paging"][$incNode["table"]] = [
+                        "offset"=>0
+                    ];
+                if(!isset($options["paging"][$incNode["table"]]["limit"]))
+                    $options["paging"][$incNode["table"]]["limit"] = get_instance()->config->item("default_relationships_page_size");
+                if($options["paging"][$incNode["table"]]["limit"]>get_instance()->config->item("max_page_size"))
+                    $options["paging"][$incNode["table"]]["limit"] = get_instance()->config->item("max_page_size");
+//                print_r($options);
                 list($rec->relationships->$fk->data,$rec->relationships->$fk->total) = $this->getRecords($incNode["table"],$options);
             }
         }
@@ -420,12 +429,17 @@ class Records {
      */
     private function generateWhereSQL($filters, $resName)
     {
+        // todo: correct filtering.... after allowing searching by fields beloning to joined tables...
         $whereArr = [];
         foreach ($filters as $filter) {
-            if ($filter->left->alias == $resName
-                && $this->dm->field_is_searchable($resName, $filter->left->field)) {
+//            if ($this->dm->field_is_searchable($resName, $filter->left->field)) {
                 $whereArr[] = generate_where_str($filter);
-            }
+//            }
+//            if ($filter->left->alias == $resName
+//                && $this->dm->field_is_searchable($resName, $filter->left->field)) {
+//                $whereArr[] = generate_where_str($filter);
+//            }
+//
         }
         return count($whereArr) ? implode(" AND ", $whereArr) : 1;
     }
@@ -480,7 +494,6 @@ class Records {
      */
     function getRecords($resourceName, $opts=[])
     {
-
         // check if resource exists
         if(!$this->dm->resource_exists($resourceName))
             throw new \Exception("Resource '$resourceName' not found",404);
@@ -492,24 +505,18 @@ class Records {
         $cfg = $this->dm->get_config($resourceName);
         $tableName = isset($cfg["name"])?$cfg["name"]:$resourceName;
 
-        $cfgLimit = get_instance()->config->item("default_page_size_limit");
-        if(!intval($cfgLimit)) {
-            log_message('error','Invalid default_page_size_limit');
-            $cfgLimit = 10;
-        }
-
         // prepare parameters
         $defaultOpts = [
             "includeStr" => [],
             "fields" => [],
             "filter"=>[],
-            "offset"=>0,
-            "limit"=>null,
+            "paging"=>[],
             "order"=>[]
         ];
 
         $opts = array_merge($defaultOpts,$opts);
-        $opts['limit'] = $opts['limit']?$opts['limit']:$cfgLimit;
+        // debug
+//        if($_GET['dbg']) print_r($opts);
 
         if(!array_key_exists("custom_where",$opts)) {
             $whereStr = $this->generateWhereSQL($opts['filter'],$tableName);
@@ -517,14 +524,9 @@ class Records {
         else {
             $whereStr = $opts['custom_where'];
         }
+//        if($_GET['dbg']) print_r($whereStr);
 
 
-        // extract total number of records matched by the query
-        $countSql = "SELECT count(*) as `cnt` FROM `$tableName` WHERE $whereStr";
-        $totalRecs = $this->dbdrv->query($countSql)->row()->cnt;
-//        echo $countSql;
-        // return if no records matched
-        if($totalRecs==0) return [[],0];
 
         // prepare field selection (validate and ....
         foreach ($opts['fields'] as $res=>$fldsStr) {
@@ -532,7 +534,7 @@ class Records {
             $tmp = explode(",",$fldsStr);
             foreach ($tmp as $fld) {
                 if($this->dm->is_valid_field($res,$fld))
-                    $opts->fields[$res][] = $fld;
+                    $opts['fields'][$res][] = $fld;
                 else
                     throw new \Exception("Invalid field name $res.$fld",401);
             }
@@ -546,21 +548,33 @@ class Records {
             $opts['includeStr'] = $includeStr===""?[]:explode(",",$includeStr);
         }
 
-        $ttt = $this->generateSqlParts($tableName,$opts['includeStr'],$opts['fields']);
-        list($select,$join,$relTree) = $ttt;
-//        echo "\n\n$tableName reltree\n";
-//        print_r($relTree);
+        list($select,$join,$relTree) = $this->generateSqlParts($tableName,$opts['includeStr'],$opts['fields']);
+
+        list($offset,$limit) = $this->get_paging($resourceName,@$opts["paging"]);
+
         // prepare ORDER BY part
         $orderStr = $this->generateSortSQL($opts['order'],$tableName);
+
+
+        // extract total number of records matched by the query
+        $countSql = "SELECT count(*) cnt FROM `{$relTree[$tableName]["name"]}` AS `{$relTree[$tableName]["alias"]}` "
+            .($join!==""?$join:"")
+            ." WHERE $whereStr";
+//        echo $countSql;
+
+        $row = $this->dbdrv->query($countSql)->row();
+        $totalRecs =$row->cnt*1;
+        // return if no records matched
+        if($totalRecs==0) return [[],0];
+
 
         // compile SELECT
         $mainSql = "SELECT $select FROM `{$relTree[$tableName]["name"]}` AS `{$relTree[$tableName]["alias"]}` "
             .($join!==""?$join:"")
             ." WHERE $whereStr"
             ." ORDER BY $orderStr"
-            ." LIMIT {$opts['offset']}, {$opts['limit']}";
-         //echo $mainSql."\n";
-
+            ." LIMIT $offset, $limit";
+//         echo $mainSql."\n";
 
         // run query
         /** @var \CI_DB_result $res */
@@ -634,7 +648,7 @@ class Records {
 
         //$table = $data->type;
         if($data->type!=$table)
-            throw new \Exception("Invalid data type '$data->type' '$table'",400);
+            throw new \Exception("Invalid data type '$data->type' for '$table'",400);
 
         // check if resource exists
         if(!$this->dm->resource_exists($table))
@@ -803,7 +817,7 @@ class Records {
             // todo: log message to the app log file
             $sqlErr = $this->dbdrv->error();
             log_message("error",$sqlErr["message"]." > $insSql");
-            throw new \Exception($sqlErr["message"], 500);
+            throw new \Exception($sqlErr["message"]."\n".$this->dbdrv->last_query(), 500);
         }
 
         // retrieve resource ID (mysql specific)
@@ -819,7 +833,7 @@ class Records {
             $selSql = $this->dbdrv
                 ->where($insertData)
                 ->get_compiled_select($table);
-            //print_r($selSql);
+//            print_r($selSql);
 
             $q = $this->dbdrv->query($selSql);
             get_instance()->debug_log($selSql);
@@ -1002,7 +1016,6 @@ class Records {
 
         if(!$this->dm->getPrimaryKey($table))
             throw new \Exception("Update by ID not allowed: table '$table' does not have primary key/unique field.",500);
-
         // extract 1:1 relation data and insert
         if(isset($resourceData->relationships)) {
             foreach ($resourceData->relationships as $relName => $relData) {
@@ -1010,31 +1023,37 @@ class Records {
                 $relSpec = $this->dm->get_relationship($table, $relName);
 
                 if ($relSpec["type"] === "outbound") {
+//                    log_message("debug",print_r($resourceData,true));
                     if (!isset($resourceData->attributes))
                         $resourceData->attributes = new \stdClass();
 
+                    if($relData === null) {
+                        $resourceData->attributes->$relName = null;
+                        continue;
+                    }
                     if (!isset($relData->type))
-                        throw new \Exception("Invalid empty data type for relation '$relName' of record ID $id of type $table");
+                        throw new \Exception("Invalid empty data type for relation '$relName' of record ID $id of type $table", 400);
 
                     if (isset($relData->id) && $relData->id !== null) {
-                        $this->updateById($relData->type,$relData->id,$relData);
+                        $this->updateById($relData->type, $relData->id, $relData);
                         $resourceData->attributes->$relName = $relData->id;
                         continue;
                     }
 
                     if ($relData->type !== $relSpec["table"])
-                        throw new \Exception("Invalid data type for relation '$relName' of record ID $id of type $table");
+                        throw new \Exception("Invalid data type for relation '$relName' of record ID $id of type $table", 400);
 
                     $includes = [];
                     //                echo "inserting";
                     //                print_r($relData);
-                    $resourceData->attributes[$relName] = $this->insert($relData->type, $relData, get_instance()->get_max_insert_recursions(),
+                    $resourceData->attributes->$relName = $this->insert($relData->type, $relData, get_instance()->get_max_insert_recursions(),
                         "", [], null, $includes);
+                    continue;
                 }
 
                 if ($relSpec["type"] === "inbound") {
                     if(!is_array($relData)) {
-                        throw new \Exception("Invalid relation data '$relName' of record ID $id of type $table: not an array");
+                        throw new \Exception("Invalid relation data '$relName' of record ID $id of type $table: not an array",400);
                         
                     }
                     foreach ($relData as $item) {
@@ -1090,7 +1109,8 @@ class Records {
      * @return bool
      * @throws \Exception
      */
-    function deleteByWhere($tableName,$where) {
+    function deleteByWhere($tableName,$where)
+    {
         // check if resource exists
         if(!$this->dm->resource_exists($tableName))
             throw new \Exception("Resource '$tableName' not found",404);
@@ -1128,4 +1148,25 @@ class Records {
             return property_exists($obj,"attributes")?"newResourceObject":"InvalidObject";
     }
 
+
+    function get_paging($resName,$paging)
+    {
+//        print_r($resName);
+//        print_r($paging);
+        $instance = get_instance();
+        $offset = 0;
+        $limit = $instance->config->item("default_page_size");
+        if (!isset($paging) || !isset($paging[$resName]))
+            return [$offset,$limit];
+
+        if(isset($paging[$resName]["offset"]))
+            $offset = $paging[$resName]["offset"];
+
+        if(isset($paging[$resName]["limit"]) && $paging[$resName]["limit"]*1<$instance->config->item("max_page_size"))
+            $limit = $paging[$resName]["limit"];
+
+        return [$offset,$limit];
+    }
+
 }
+

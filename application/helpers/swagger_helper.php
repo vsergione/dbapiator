@@ -143,6 +143,15 @@ function create_multiple_records()
         "tags"=>["_bulk"],
         "parameters" => [
             [
+                "name"=>"Content-type",
+                "in"=>"header",
+                "required"=>true,
+                "schema"=>[
+                    "type"=>"string",
+                    "default"=>"application/vnd.api+json"
+                ]
+            ],
+            [
                 "name"=>"onduplicate",
                 "in"=>"query",
                 "description"=>"Select behaviour when a duplicate key conflict occurs. Possible options:\n- update: update certain fields \n- ignore: do nothing and \n ",
@@ -247,7 +256,18 @@ function update_multiple_records()
                 ]
             ]
         ],
-        "parameters" => [],
+        "parameters" => [
+            [
+                "name"=>"Content-type",
+                "in"=>"header",
+                "required"=>true,
+                "schema"=>[
+                    "type"=>"string",
+                    "default"=>"application/vnd.api+json"
+                ]
+            ],
+
+        ],
         "responses"=> [
             "200"=>[
                 "description"=>"todo"
@@ -659,7 +679,17 @@ function create_single_record($resourceName,$resourceSpecifications)
         "summary" => "Create single record of type $resourceName",
         "description" => "",
         "operationId" => $resourceName."_create_single_record",
-        "parameters" => [],
+        "parameters" => [
+            [
+                "name"=>"Content-type",
+                "in"=>"header",
+                "required"=>true,
+                "schema"=>[
+                    "type"=>"string",
+                    "default"=>"application/vnd.api+json"
+                ]
+            ]
+        ],
         "tags"=>[$resourceName],
         "responses"=> [
             "200"=>[
@@ -832,6 +862,15 @@ function update_single_record($resourceName,$resourceSpecifications,$dataModel)
         "operationId" => $resourceName."_update_single_record",
     ];
     $data["parameters"]= [
+        [
+            "name"=>"Content-type",
+            "in"=>"header",
+            "required"=>true,
+            "schema"=>[
+                "type"=>"string",
+                "default"=>"application/vnd.api+json"
+            ]
+        ],
         [
             "name"=>$resourceSpecifications["keyFld"],
             "in"=>"path",
@@ -1162,7 +1201,8 @@ function open_api_spec($hostName, $basePath,$desc,$title,$name,$email)
 //            ]
         ],
         "servers" => [
-            ["url"=>sprintf("https://%s%s",$hostName,$basePath)]
+            ["url"=>$basePath]
+//            ["url"=>sprintf("http://%s%s",$hostName,$basePath)]
         ],
         "paths"=>[],
         "components"=> [

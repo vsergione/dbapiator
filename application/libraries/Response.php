@@ -26,7 +26,7 @@ class Response {
 	function __get($name) {
 		if(property_exists($this,$name))
 			return $this->$name;
-		throw new Exception("Property not found");
+		throw new Exception("Property '$name' not found",500);
 	}
 
     /**

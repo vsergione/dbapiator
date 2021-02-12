@@ -34,9 +34,6 @@ require_once(APPPATH."third_party/Apiator/Autoloader.php");
  */
 class Dbapi extends CI_Controller
 {
-    private $default_options = [
-        "page[offset]"=>"0"
-    ];
     /**
      * @var CI_DB_pdo_driver
      */
@@ -155,7 +152,7 @@ class Dbapi extends CI_Controller
 
         $this->apiConfigDir = $this->config->item("api_config_dir")($configName);
 
-        $this->baseUrl = "https://".$_SERVER["SERVER_NAME"]."/v2";
+        $this->baseUrl = $this->config->item("base_url")."/v2";
         $this->JsonApiDocOptions["baseUrl"] = $this->baseUrl;
 
         if(!is_dir($this->apiConfigDir)) {
@@ -203,7 +200,7 @@ class Dbapi extends CI_Controller
         $apiCfg = array_merge_recursive($permissions,$structure);
 
 //        print_r($apiCfg);
-
+        error_reporting(0);
         /**
          * @var CI_DB_pdo_driver db
          */
@@ -225,7 +222,7 @@ class Dbapi extends CI_Controller
         $this->apiSettings = $settings;
 
         // initialize recs
-        $this->recs = \Apiator\DBApi\Records::init($this->apiDb,$this->apiDm);
+        $this->recs = \Apiator\DBApi\Records::init($this->apiDb,$this->apiDm,$this->apiConfigDir);
         if(!$this->recs) {
             // TODO log unable to initialize records navigator class
             HttpResp::server_error("Invalid API config");
@@ -285,7 +282,7 @@ class Dbapi extends CI_Controller
 
         if(in_array("application/x-www-form-urlencoded",$cType)) {
             $inputData = json_decode(json_encode($this->input->post()));
-            print_r($this->input->raw_input_stream);
+//            print_r($this->input->raw_input_stream);
             validate_body_data($inputData);
             return $inputData;
         }
@@ -501,7 +498,11 @@ class Dbapi extends CI_Controller
 
             $_GET["filter"] = "id=".$recId;
             $qp = $this->getQueryParameters($resourceName);
-            $qp["offset"] = 0;
+            $qp["paging"] = [
+                $resourceName => [
+                    "offset" => 0
+                ]
+            ];
 
             $this->getRecords($configName,$resourceName,$recId,$qp);
         }
@@ -553,19 +554,23 @@ class Dbapi extends CI_Controller
                 $queryParas["fields"] = $flds;
         }
 
-        // extract paging parameters
-        $queryParas["offset"] = 0;
-        if($page = $input->get("page")) {
-            // get offset
-            if(isset($page["offset"]) && preg_match("/^\d+$/",$page["offset"]))
-                $queryParas["offset"] = intval($page["offset"]);
-            else
-                $queryParas["offset"] = 0;
+        $queryParas["paging"] = [];
 
-            // get limit
-            if(isset($page["limit"])  && preg_match("/^\d+$/",$page["limit"]))
-                $queryParas["limit"] = intval($page["limit"]);
-        }
+        // get paging fieldset fields
+        $paging = $input->get("page");
+        if(is_array($paging))
+            $queryParas["paging"] = $paging;
+        if(!isset($queryParas["paging"][$resName]))
+            $queryParas["paging"][$resName] = [];
+        if(isset($queryParas["paging"]["limit"]))
+            $queryParas["paging"][$resName]["limit"] = $queryParas["paging"]["limit"];
+        if(isset($queryParas["paging"]["offset"]))
+            $queryParas["paging"][$resName]["offset"] = $queryParas["paging"]["offset"];
+
+
+
+        if(!isset($queryParas["paging"][$resName]))
+            $queryParas["paging"][$resName] = ["offset"=>0];
 
         // get filter
         if($filterStr = $input->get("filter")) {
@@ -587,7 +592,6 @@ class Dbapi extends CI_Controller
                 $queryParas["update"] = $updateFields;
             }
         }
-
         return $queryParas;
     }
 
@@ -643,8 +647,9 @@ class Dbapi extends CI_Controller
             else {
                 $doc->setData($records);
                 $offset = 0;
-                if(isset($queryParameters["offset"]))
-                    $offset = $queryParameters["offset"];
+                if(isset($queryParameters["paging"]) && isset($queryParameters["paging"][$resourceName])
+                    && isset($queryParameters["paging"][$resourceName]["offset"]))
+                    $offset = $queryParameters["paging"][$resourceName]["offset"];
                 $doc->setMeta(\JSONApi\Meta::factory(["offset"=>$offset,"totalRecords"=>$totalRecords]));
 
             }
@@ -712,7 +717,7 @@ class Dbapi extends CI_Controller
                 ],true);
 
                 $db->query("INSERT INTO test values(2,2,2) ON DUPLICATE KEY UPDATE dd=dd");
-                echo $db->affected_rows();
+//                echo $db->affected_rows();
                 break;
             default:
                 $this->load->view("test");
@@ -842,6 +847,22 @@ class Dbapi extends CI_Controller
                 JSONApi\Document::error_doc($this->JsonApiDocOptions, JSONApi\Error::from_exception($e) )->json_data()
             );
         }
+
+        if(!is_object($inputData->data)) {
+            $e = new Exception("Invalid input data.\n$.data expected to be an object.");
+            HttpResp::json_out(
+                400,
+                JSONApi\Document::error_doc($this->JsonApiDocOptions, JSONApi\Error::from_exception($e) )->json_data()
+            );
+        }
+
+        if(!isset($inputData->data->attributes)) {
+            $inputData->data->attributes = new stdClass();
+        }
+
+
+        $fldName = $rel["field"];
+        $inputData->data->attributes->$fldName = $recId;
 
         $fld = $rel["field"];
         $this->createSingleRecord($configName,$rel["table"],$inputData);
@@ -1004,6 +1025,7 @@ class Dbapi extends CI_Controller
                 $doc = \JSONApi\Document::create($this->JsonApiDocOptions,$insertedRecords)->json_data();
             HttpResp::json_out(200, $doc);
         }
+
         $err = \JSONApi\Error::factory(["code"=>400,"title"=>"No records inserted due to invalid input data"]);
         HttpResp::jsonapi_out(400,\JSONApi\Document::error_doc($this->JsonApiDocOptions,$err));
     }
@@ -1012,8 +1034,9 @@ class Dbapi extends CI_Controller
      * @param $tableName
      * @param $recId
      */
-    function deleteSingleRecord($tableName, $recId)
+    function deleteSingleRecord($configName,$tableName, $recId)
     {
+        $this->_init($configName);
         try {
             $this->recs->deleteById($tableName, $recId);
             HttpResp::no_content(204);

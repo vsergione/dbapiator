@@ -141,6 +141,7 @@ class Datamodel {
      */
     function field_is_sortable($resName, $fldName)
     {
+//        print_r($this->dataModel[$resName]["fields"][$fldName]);
         if(!isset($this->dataModel[$resName]["fields"][$fldName]))
             throw new \Exception("Invalid field $fldName (is_sortable)",400);
         return isset($this->dataModel[$resName]["fields"][$fldName]["sortable"])?
@@ -157,7 +158,7 @@ class Datamodel {
     function field_is_searchable($resName, $fldName)
     {
         if(!isset($this->dataModel[$resName]["fields"][$fldName]))
-            throw new \Exception("Invalid field $resName.   $fldName (is_searchable)",400);
+            throw new \Exception("Invalid field $resName.$fldName (is_searchable)",400);
 
         return isset($this->dataModel[$resName]["fields"][$fldName]["searchable"])?
             $this->dataModel[$resName]["fields"][$fldName]["searchable"]:
@@ -393,62 +394,38 @@ class Datamodel {
         }
 
         switch($fields[$fieldName]["type"]["proto"]) {
-            // numeric types
-            case "tinyint":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "smallint":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "mediumint":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "int":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "bigint":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
-            case "decimal":
-                if(is_numeric($value)) {
-                    return $value*1;
-                }
-                break;
             case "float":
                 if(is_numeric($value))
                     $value =floatval($value);
                 if(in_array(gettype($value), ["float","double","integer"]))
                     return $value;
                 break;
+            // numeric types
+            case "smallint":
+            case "mediumint":
+            case "int":
+            case "bigint":
+            case "decimal":
+            case "tinyint":
+                if(is_numeric($value)) {
+                    return $value*1;
+                }
+                break;
+            case "real":
+            case "bit":
             case "double":
                 if(is_numeric($value)) {
                     return floatval($value);
                 }
                 break;
-            case "real":
-                if(is_numeric($value)) {
-                    return floatval($value);
-                }
-                break;
-            case "bit":
-                if(is_numeric($value)) {
-                    return floatval($value);
-                }
-                break;
             case "boolean":
+//                var_dump($value);
                 if(is_bool($value)) {
-                    return $value;
+                    return boolval($value);
                 }
+                $boolmap = ["true"=>true,"1"=>true,"0"=>false,"false"=>false];
+                if(isset($boolmap[$value]))
+                    return $boolmap[$value];
                 break;
             case "serial":
                 if(is_numeric($value)) {
@@ -465,7 +442,7 @@ class Datamodel {
                     return $value;
                 break;
             case "timestamp":
-                if(preg_match("/^\d{4}\-\d{2}-\d{2}( \d{2}:\d{2}:\d{2}){0,1}$/i",$value)) {
+                if(preg_match("/^\d{4}\-\d{1,2}-\d{1,2}( \d{1,2}:\d{1,2}:\d{1,2}){0,1}$/i",$value)) {
                     log_message("debug","valid timestamp ".$value);
                     return $value;
                 }
